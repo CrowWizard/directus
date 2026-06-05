@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 import { useAuthStore } from './stores/auth';
 import CustomersView from './views/customers-view.vue';
+import InquiryItemSummaryView from './views/inquiry-item-summary-view.vue';
+import InquiryItemsView from './views/inquiry-items-view.vue';
 import LoginView from './views/login-view.vue';
 import SuppliersView from './views/suppliers-view.vue';
 import TasksView from './views/tasks-view.vue';
@@ -12,6 +14,8 @@ export const router = createRouter({
 		{ path: '/', redirect: '/tasks' },
 		{ path: '/login', component: LoginView, meta: { public: true } },
 		{ path: '/customers', component: CustomersView },
+		{ path: '/inquiry-items', component: InquiryItemsView },
+		{ path: '/inquiry-items/:id', component: InquiryItemSummaryView },
 		{ path: '/suppliers', component: SuppliersView },
 		{ path: '/tasks', component: TasksView },
 	],
