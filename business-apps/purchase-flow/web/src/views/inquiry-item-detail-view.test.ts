@@ -1,17 +1,17 @@
-import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import 询价项DetailView from './inquiry-item-detail-view.vue';
 import { commentAndUpdateState, get询价项Detail } from '../api/purchase-flow';
 import { useAuthStore } from '../stores/auth';
+import 询价项DetailView from './inquiry-item-detail-view.vue';
 
 vi.mock('../api/purchase-flow', () => ({
 	commentAndUpdateState: vi.fn(),
 	get询价项Detail: vi.fn(),
 }));
 
-vi.mock('vue-router', () => ({
+vi.mock('vue-router', async (importOriginal) => ({
+	...(await importOriginal<typeof import('vue-router')>()),
 	useRoute: () => ({ params: { id: 'inq-1' } }),
 	useRouter: () => ({ push: vi.fn() }),
 }));
@@ -37,6 +37,7 @@ describe('InquiryItemDetailView', () => {
 			state: 'Purchasing',
 			supplier_quotes: [],
 		});
+
 		vi.mocked(commentAndUpdateState).mockResolvedValue(undefined);
 
 		const wrapper = mount(询价项DetailView, {

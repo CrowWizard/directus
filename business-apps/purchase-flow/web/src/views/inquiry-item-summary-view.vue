@@ -1,29 +1,10 @@
-<template>
-	<app-shell>
-		<section class="section-header">
-			<div>
-				<p class="eyebrow">Summary</p>
-				<h2>询价项摘要</h2>
-			</div>
-			<router-link v-if="item" class="text-link" :to="`/inquiry-items/${item.id}/detail`">查看完整详情</router-link>
-		</section>
-		<p v-if="loading" class="state-card">正在加载询价项...</p>
-		<p v-else-if="error" class="state-card error">{{ error }}</p>
-		<div v-else-if="item" class="detail-grid">
-			<inquiry-item-key-info :item="item" />
-			<quote-summary-table :quotes="item.supplier_quotes || []" />
-		</div>
-	</app-shell>
-</template>
-
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-import { useRoute } from 'vue-router';
-
+import { RouterLink, useRoute } from 'vue-router';
+import { get询价项Summary } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
 import InquiryItemKeyInfo from '../components/inquiry-item-key-info.vue';
 import QuoteSummaryTable from '../components/quote-summary-table.vue';
-import { get询价项Summary } from '../api/purchase-flow';
 import type { InquiryItem } from '../types/purchase-flow';
 
 const route = useRoute();
@@ -41,3 +22,21 @@ onMounted(async () => {
 	}
 });
 </script>
+
+<template>
+	<AppShell>
+		<section class="section-header">
+			<div>
+				<p class="eyebrow">Summary</p>
+				<h2>询价项摘要</h2>
+			</div>
+			<RouterLink v-if="item" class="text-link" :to="`/inquiry-items/${item.id}/detail`">查看完整详情</RouterLink>
+		</section>
+		<p v-if="loading" class="state-card">正在加载询价项...</p>
+		<p v-else-if="error" class="state-card error">{{ error }}</p>
+		<div v-else-if="item" class="detail-grid">
+			<InquiryItemKeyInfo :item="item" />
+			<QuoteSummaryTable :quotes="item.supplier_quotes || []" />
+		</div>
+	</AppShell>
+</template>

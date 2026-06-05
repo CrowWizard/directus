@@ -296,12 +296,12 @@
 
 默认初始化用户：
 
-| 角色 | 邮箱 | 密码 |
-| --- | --- | --- |
-| 外贸员 | `sales@example.com` | `12345678` |
-| 采购员 | `buyer1@example.com` | `12345678` |
-| 采购员 | `buyer2@example.com` | `12345678` |
-| 经理 | `manager@example.com` | `12345678` |
+| 角色   | 邮箱                  | 密码       |
+| ------ | --------------------- | ---------- |
+| 外贸员 | `sales@example.com`   | `12345678` |
+| 采购员 | `buyer1@example.com`  | `12345678` |
+| 采购员 | `buyer2@example.com`  | `12345678` |
+| 经理   | `manager@example.com` | `12345678` |
 
 默认采购员画像：
 
@@ -392,12 +392,12 @@ GET /purchase-flow-accept/accept?token=xxx
 
 当前重算后的统计结果曾为：
 
-| 用户 | 姓名 | 角色 | 进行中 | 累计完成 | 本周完成 |
-| --- | --- | --- | ---: | ---: | ---: |
-| `buyer1@example.com` | 采购 B | Buyer | 2 | 0 | 0 |
-| `buyer2@example.com` | 采购 C | Buyer | 1 | 0 | 0 |
-| `manager@example.com` | 经理 M | Manager | 3 | 0 | 0 |
-| `sales@example.com` | 外贸 A | Sales | 1 | 0 | 0 |
+| 用户                  | 姓名   | 角色    | 进行中 | 累计完成 | 本周完成 |
+| --------------------- | ------ | ------- | -----: | -------: | -------: |
+| `buyer1@example.com`  | 采购 B | Buyer   |      2 |        0 |        0 |
+| `buyer2@example.com`  | 采购 C | Buyer   |      1 |        0 |        0 |
+| `manager@example.com` | 经理 M | Manager |      3 |        0 |        0 |
+| `sales@example.com`   | 外贸 A | Sales   |      1 |        0 |        0 |
 
 ## 脚本清单
 
@@ -479,16 +479,16 @@ extensions/purchase-flow-accept/dist/index.js
 
 ```json
 {
-  "directus:extension": {
-    "type": "endpoint",
-    "path": "dist/index.js",
-    "source": "src/index.js",
-    "sandbox": {
-      "enabled": false,
-      "requestedScopes": {}
-    },
-    "host": "^11.0.0"
-  }
+	"directus:extension": {
+		"type": "endpoint",
+		"path": "dist/index.js",
+		"source": "src/index.js",
+		"sandbox": {
+			"enabled": false,
+			"requestedScopes": {}
+		},
+		"host": "^11.0.0"
+	}
 }
 ```
 
@@ -508,7 +508,8 @@ WECHAT_WORK_WEBHOOK_URL=企业微信机器人Webhook
 
 - `.env` 修改后必须重启 Directus。
 - 曾经发现 Directus 进程没有读到 `.env`，建议启动时显式传环境变量，或确认服务进程实际 cwd 和 `.env` 位置。
-- Directus 曾扫描 `/home/jswork/directus/extensions`，也曾使用 `/home/jswork/directus/dist/extensions`，因此扩展安装脚本曾同步安装到两个目录。
+- Directus 曾扫描 `/home/jswork/directus/extensions`，也曾使用
+  `/home/jswork/directus/dist/extensions`，因此扩展安装脚本曾同步安装到两个目录。
 
 ## 企业微信通知
 
@@ -569,9 +570,7 @@ directus_fields.meta.translations
 
 ```json
 {
-  "choices": [
-    { "text": "High", "value": "High" }
-  ]
+	"choices": [{ "text": "High", "value": "High" }]
 }
 ```
 
@@ -637,3 +636,13 @@ curl -i 'http://localhost:8055/purchase-flow-accept/accept?token=probe'
 4. 补历史类似报价模糊推荐。
 5. 优化权限，不要所有角色都拥有过宽的集合级权限。
 6. 将 `user_task_summaries` 的详情 JSON 替换成更好的可视化列表或自定义页面。
+
+## 独立前端页面
+
+新增独立 Vue 前端应用：`business-apps/purchase-flow/web`。
+
+询价项 直接使用 `inquiry_items`，一个询价项就是一个报价 询价项。
+
+页面：登录、我的任务、客户管理、供应商管理、询价项列表、询价项摘要、询价项完整详情。
+
+注意：沟通并切换状态当前由前端串联 `conversations` 创建和 `inquiry_items` 状态更新完成，后续建议补原子业务 Endpoint。

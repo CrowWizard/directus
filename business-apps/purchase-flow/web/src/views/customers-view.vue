@@ -1,29 +1,8 @@
-<template>
-	<app-shell>
-		<section class="section-header">
-			<div>
-				<p class="eyebrow">Customers</p>
-				<h2>客户管理</h2>
-			</div>
-		</section>
-		<entity-crud-table
-			:error="error"
-			:fields="fields"
-			:items="customers"
-			:loading="loading"
-			title="客户"
-			@delete="remove"
-			@submit="save"
-		/>
-	</app-shell>
-</template>
-
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-
+import { createCustomer, deleteCustomer, listCustomers, updateCustomer } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
 import EntityCrudTable from '../components/entity-crud-table.vue';
-import { createCustomer, deleteCustomer, listCustomers, updateCustomer } from '../api/purchase-flow';
 import type { Customer } from '../types/purchase-flow';
 
 const fields = [
@@ -67,3 +46,23 @@ async function remove(id: string) {
 
 onMounted(load);
 </script>
+
+<template>
+	<AppShell>
+		<section class="section-header">
+			<div>
+				<p class="eyebrow">Customers</p>
+				<h2>客户管理</h2>
+			</div>
+		</section>
+		<EntityCrudTable
+			:error="error"
+			:fields="fields"
+			:items="customers"
+			:loading="loading"
+			title="客户"
+			@delete="remove"
+			@submit="save"
+		/>
+	</AppShell>
+</template>

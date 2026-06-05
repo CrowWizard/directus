@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router';
-
 import { useAuthStore } from './stores/auth';
 import CustomersView from './views/customers-view.vue';
 import InquiryItemDetailView from './views/inquiry-item-detail-view.vue';

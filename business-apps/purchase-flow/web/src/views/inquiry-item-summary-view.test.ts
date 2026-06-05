@@ -1,13 +1,13 @@
-import { createPinia } from 'pinia';
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import 询价项SummaryView from './inquiry-item-summary-view.vue';
 import { get询价项Summary } from '../api/purchase-flow';
+import 询价项SummaryView from './inquiry-item-summary-view.vue';
 
 vi.mock('../api/purchase-flow', () => ({ get询价项Summary: vi.fn() }));
 
-vi.mock('vue-router', () => ({
+vi.mock('vue-router', async (importOriginal) => ({
+	...(await importOriginal<typeof import('vue-router')>()),
 	useRoute: () => ({ params: { id: 'inq-1' } }),
 	useRouter: () => ({ push: vi.fn() }),
 }));

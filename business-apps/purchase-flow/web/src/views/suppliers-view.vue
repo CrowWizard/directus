@@ -1,29 +1,8 @@
-<template>
-	<app-shell>
-		<section class="section-header">
-			<div>
-				<p class="eyebrow">Suppliers</p>
-				<h2>供应商管理</h2>
-			</div>
-		</section>
-		<entity-crud-table
-			:error="error"
-			:fields="fields"
-			:items="suppliers"
-			:loading="loading"
-			title="供应商"
-			@delete="remove"
-			@submit="save"
-		/>
-	</app-shell>
-</template>
-
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-
+import { createSupplier, deleteSupplier, listSuppliers, updateSupplier } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
 import EntityCrudTable from '../components/entity-crud-table.vue';
-import { createSupplier, deleteSupplier, listSuppliers, updateSupplier } from '../api/purchase-flow';
 import type { Supplier } from '../types/purchase-flow';
 
 const fields = [
@@ -69,3 +48,23 @@ async function remove(id: string) {
 
 onMounted(load);
 </script>
+
+<template>
+	<AppShell>
+		<section class="section-header">
+			<div>
+				<p class="eyebrow">Suppliers</p>
+				<h2>供应商管理</h2>
+			</div>
+		</section>
+		<EntityCrudTable
+			:error="error"
+			:fields="fields"
+			:items="suppliers"
+			:loading="loading"
+			title="供应商"
+			@delete="remove"
+			@submit="save"
+		/>
+	</AppShell>
+</template>

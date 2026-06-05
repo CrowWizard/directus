@@ -1,9 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import SuppliersView from './suppliers-view.vue';
 import { createSupplier, deleteSupplier, listSuppliers, updateSupplier } from '../api/purchase-flow';
+import SuppliersView from './suppliers-view.vue';
 
 vi.mock('../api/purchase-flow', () => ({
 	createSupplier: vi.fn(),
@@ -12,7 +11,10 @@ vi.mock('../api/purchase-flow', () => ({
 	updateSupplier: vi.fn(),
 }));
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('vue-router', async (importOriginal) => ({
+	...(await importOriginal<typeof import('vue-router')>()),
+	useRouter: () => ({ push: vi.fn() }),
+}));
 
 describe('SuppliersView', () => {
 	beforeEach(() => {
@@ -45,7 +47,11 @@ describe('SuppliersView', () => {
 		await wrapper.find('form').trigger('submit');
 		await wrapper.find('[data-test="delete-supplier-1"]').trigger('click');
 
-		expect(updateSupplier).toHaveBeenCalledWith('supplier-1', expect.objectContaining({ supplier_name: 'Better Supplier' }));
+		expect(updateSupplier).toHaveBeenCalledWith(
+			'supplier-1',
+			expect.objectContaining({ supplier_name: 'Better Supplier' }),
+		);
+
 		expect(deleteSupplier).toHaveBeenCalledWith('supplier-1');
 	});
 });

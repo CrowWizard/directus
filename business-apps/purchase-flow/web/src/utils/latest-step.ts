@@ -40,7 +40,12 @@ function stateFallback(询价项: LatestStepInput['询价项']): LatestStep {
 	}
 
 	if (询价项.state === 'WaitingSalesReview') {
-		return { title: '等待外贸处理', detail: '等待外贸补充报价信息', at: 询价项.updated_at || null, ownerScope: 'Sales' };
+		return {
+			title: '等待外贸处理',
+			detail: '等待外贸补充报价信息',
+			at: 询价项.updated_at || null,
+			ownerScope: 'Sales',
+		};
 	}
 
 	return { title: '状态更新', detail: `当前状态：${询价项.state}`, at: 询价项.updated_at || null, ownerScope: null };
@@ -92,6 +97,7 @@ export function getLatestStep(input: LatestStepInput): LatestStep {
 	candidates.sort((left, right) => right.score - left.score);
 
 	const latest = candidates[0];
+
 	if (latest && latest.score > 0) {
 		const { score: _score, ...step } = latest;
 

@@ -1,3 +1,19 @@
+<script setup lang="ts">
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { useAuthStore } from '../stores/auth';
+
+const auth = useAuthStore();
+const router = useRouter();
+const email = ref('');
+const password = ref('');
+
+async function submit() {
+	await auth.login(email.value, password.value);
+	await router.push('/tasks');
+}
+</script>
+
 <template>
 	<main class="login-page">
 		<section class="login-card">
@@ -20,20 +36,3 @@
 		</section>
 	</main>
 </template>
-
-<script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
-
-import { useAuthStore } from '../stores/auth';
-
-const auth = useAuthStore();
-const router = useRouter();
-const email = ref('');
-const password = ref('');
-
-async function submit() {
-	await auth.login(email.value, password.value);
-	await router.push('/tasks');
-}
-</script>

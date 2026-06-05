@@ -1,17 +1,17 @@
-import { createPinia, setActivePinia } from 'pinia';
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import TasksView from './tasks-view.vue';
 import { getTasks, get询价项Detail } from '../api/purchase-flow';
 import { useAuthStore } from '../stores/auth';
+import TasksView from './tasks-view.vue';
 
 vi.mock('../api/purchase-flow', () => ({
 	getTasks: vi.fn(),
 	get询价项Detail: vi.fn(),
 }));
 
-vi.mock('vue-router', () => ({
+vi.mock('vue-router', async (importOriginal) => ({
+	...(await importOriginal<typeof import('vue-router')>()),
 	useRouter: () => ({ push: vi.fn() }),
 }));
 
@@ -39,6 +39,7 @@ describe('TasksView', () => {
 				state: 'Assigned',
 			},
 		]);
+
 		mockGet询价项Detail.mockResolvedValue({
 			id: 'inq-1',
 			conversations: [{ content: '请补充 MOQ', created_at: '2026-06-05T02:00:00Z' }],

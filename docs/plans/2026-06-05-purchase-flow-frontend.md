@@ -1,10 +1,14 @@
 # Purchase Flow Frontend Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use trycycle-executing to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use trycycle-executing to implement this plan task-by-task. Steps use
+> checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 构建一个独立采购报价前端应用，让用户查看自己的任务、维护客户和供应商、浏览 询价项摘要与完整详情，并在详情页围绕报价沟通和切换状态。
+**Goal:**
+构建一个独立采购报价前端应用，让用户查看自己的任务、维护客户和供应商、浏览 询价项摘要与完整详情，并在详情页围绕报价沟通和切换状态。
 
-**Architecture:** 使用 `inquiry_items` 作为前端业务实体：一个 `inquiry_items` 记录就是一次报价询价项。前端新建独立 Vue 应用，直接调用现有 Directus REST 接口和接单 Endpoint；登录态使用 Directus `/auth/login`、`/auth/refresh`、`/users/me`，业务数据通过 `/items/*` 聚合。
+**Architecture:** 使用 `inquiry_items` 作为前端业务实体：一个 `inquiry_items`
+记录就是一次报价询价项。前端新建独立 Vue 应用，直接调用现有 Directus REST 接口和接单 Endpoint；登录态使用 Directus
+`/auth/login`、`/auth/refresh`、`/users/me`，业务数据通过 `/items/*` 聚合。
 
 **Tech Stack:** Vue 3、Vue Router、Pinia、Vite、TypeScript、Axios、Vitest、Vue Test Utils、Directus REST API。
 
@@ -12,31 +16,49 @@
 
 ## 关键决策
 
-1. 询价项直接使用 `inquiry_items`。当前数据模型已经把询价、负责人、状态、优先级、客户、采购员、附件、时间线关键字段都放在 `inquiry_items`，而 `supplier_quotes`、`customer_quotes`、`conversations` 都通过 `inquiry_item_id` 关联它。因此前端只需要在命名上把 `inquiry_items` 映射为 询价项，不需要新增 `inquiry-items` 集合。
+1. 询价项直接使用
+   `inquiry_items`。当前数据模型已经把询价、负责人、状态、优先级、客户、采购员、附件、时间线关键字段都放在
+   `inquiry_items`，而 `supplier_quotes`、`customer_quotes`、`conversations` 都通过 `inquiry_item_id`
+   关联它。因此前端只需要在命名上把 `inquiry_items` 映射为 询价项，不需要新增 `inquiry-items` 集合。
 
-2. 不做 Directus 业务前端 Module。前端单独作为一个应用实现，避免被 Directus Admin 的信息架构、组件和路由约束影响，也方便后续做更贴合采购报价流程的界面。
+2. 不做 Directus 业务前端 Module。前端单独作为一个应用实现，避免被 Directus
+   Admin 的信息架构、组件和路由约束影响，也方便后续做更贴合采购报价流程的界面。
 
-3. 第一版不强制新增后端接口。独立前端先复用现有 Directus REST 能力完成闭环；后端原子接口、权限收窄、状态枚举增强作为后续补强。
+3. 第一版不强制新增后端接口。独立前端先复用现有 Directus
+   REST 能力完成闭环；后端原子接口、权限收窄、状态枚举增强作为后续补强。
 
 ## 前置分析：当前后端不足
 
-1. 没有 询价项 聚合接口。虽然 询价项 可以直接等于 `inquiry_items`，但前端展示完整 询价项 时仍要多次请求 `inquiry_items`、`supplier_quotes`、`customer_quotes`、`conversations`、客户、供应商和用户信息。后续更好的接口是 `GET /purchase-flow/inquiry-items/:id`，内部仍以 `inquiry_items.id` 为主键。
+1. 没有 询价项 聚合接口。虽然 询价项 可以直接等于 `inquiry_items`，但前端展示完整 询价项 时仍要多次请求
+   `inquiry_items`、`supplier_quotes`、`customer_quotes`、`conversations`、客户、供应商和用户信息。后续更好的接口是
+   `GET /purchase-flow/inquiry-items/:id`，内部仍以 `inquiry_items.id` 为主键。
 
-2. 没有“沟通并切换状态”的原子接口。当前只能前端先 `POST /items/conversations`，再 `PATCH /items/inquiry_items/:id`。两步之间失败会导致沟通记录和状态不一致。
+2. 没有“沟通并切换状态”的原子接口。当前只能前端先 `POST /items/conversations`，再
+   `PATCH /items/inquiry_items/:id`。两步之间失败会导致沟通记录和状态不一致。
 
-3. 状态模型缺少明确的“再次报价”状态。现有状态只有 `Draft`、`Assigned`、`Purchasing`、`WaitingSalesReview`、`Quoted`、`Closed`。第一版将“再次报价【任务属于 buyer】”映射为 `Purchasing`，后续建议新增 `RequoteRequested` 并同步任务统计规则。
+3. 状态模型缺少明确的“再次报价”状态。现有状态只有
+   `Draft`、`Assigned`、`Purchasing`、`WaitingSalesReview`、`Quoted`、`Closed`。第一版将“再次报价【任务属于 buyer】”映射为
+   `Purchasing`，后续建议新增 `RequoteRequested` 并同步任务统计规则。
 
-4. “最新一步的具体内容”没有结构化字段。当前 `user_task_summaries.active_task_details` 只包含任务摘要。最新一步需要前端从最新 `conversations`、最新供应商报价、最新客户报价、接单时间和 询价项 更新时间中推导。
+4. “最新一步的具体内容”没有结构化字段。当前 `user_task_summaries.active_task_details`
+   只包含任务摘要。最新一步需要前端从最新
+   `conversations`、最新供应商报价、最新客户报价、接单时间和 询价项 更新时间中推导。
 
-5. 任务统计刷新不覆盖所有业务动作。当前 Hook 只监听 `inquiry_items` 的 create/update。新增报价和沟通记录时不会直接刷新 `user_task_summaries`，所以独立前端任务页应直接查询 `inquiry_items` 和相关最新记录，不把摘要 JSON 作为唯一数据源。
+5. 任务统计刷新不覆盖所有业务动作。当前 Hook 只监听 `inquiry_items` 的 create/update。新增报价和沟通记录时不会直接刷新
+   `user_task_summaries`，所以独立前端任务页应直接查询 `inquiry_items` 和相关最新记录，不把摘要 JSON 作为唯一数据源。
 
-6. 权限过宽。`scripts/init-purchase-flow-permissions.sh` 对多个角色授予大量集合的全部操作权限，包括 `assignment_accept_tokens` 等敏感集合。独立前端不能只靠隐藏按钮保证安全，后续必须收窄 Directus 权限。
+6. 权限过宽。`scripts/init-purchase-flow-permissions.sh` 对多个角色授予大量集合的全部操作权限，包括
+   `assignment_accept_tokens` 等敏感集合。独立前端不能只靠隐藏按钮保证安全，后续必须收窄 Directus 权限。
 
-7. 附件模型未与 Directus 文件库正式关联。`attachments` 使用 `file_url`，业务表上的 `attachment_ids` 是 JSON。第一版可展示 URL，文件上传和预览后续再与 `directus_files` 关系化。
+7. 附件模型未与 Directus 文件库正式关联。`attachments` 使用 `file_url`，业务表上的 `attachment_ids`
+   是 JSON。第一版可展示 URL，文件上传和预览后续再与 `directus_files` 关系化。
 
-8. 接单 Endpoint 跳转仍指向 Directus 内容页。`extensions/purchase-flow-accept/dist/index.js` 目前跳转到 `${PUBLIC_ADMIN_URL}/content/inquiry_items/:id`。独立前端上线后，应跳转到 `${PUBLIC_PURCHASE_APP_URL}/inquiry-items/:id/detail`。
+8. 接单 Endpoint 跳转仍指向 Directus 内容页。`extensions/purchase-flow-accept/dist/index.js` 目前跳转到
+   `${PUBLIC_ADMIN_URL}/content/inquiry_items/:id`。独立前端上线后，应跳转到
+   `${PUBLIC_PURCHASE_APP_URL}/inquiry-items/:id/detail`。
 
-9. 后端 Hook 有一个逻辑死分支。`prepareInquiryAssignment` 在已提前 return finished state 后再检查 finished state 补 `completed_at`，该分支不可达。前端不能假设完成时间总能自动补齐。
+9. 后端 Hook 有一个逻辑死分支。`prepareInquiryAssignment` 在已提前 return finished state 后再检查 finished state 补
+   `completed_at`，该分支不可达。前端不能假设完成时间总能自动补齐。
 
 ## 现有可复用接口
 
@@ -50,11 +72,14 @@
 
 5. 我的任务统计：`GET /items/user_task_summaries?filter[user_id][_eq]=$CURRENT_USER&fields=*`。只作为计数参考，列表不依赖它。
 
-6. 我的任务列表：`GET /items/inquiry_items`。Sales 过滤 `sales_owner_id = currentUser` 和 `state in Draft,WaitingSalesReview`；Buyer 过滤 `buyer_owner_id = currentUser` 和 `state in Assigned,Purchasing`；Manager 过滤 `state in Assigned,Purchasing,WaitingSalesReview`。
+6. 我的任务列表：`GET /items/inquiry_items`。Sales 过滤 `sales_owner_id = currentUser` 和
+   `state in Draft,WaitingSalesReview`；Buyer 过滤 `buyer_owner_id = currentUser` 和
+   `state in Assigned,Purchasing`；Manager 过滤 `state in Assigned,Purchasing,WaitingSalesReview`。
 
 7. 询价项摘要：`GET /items/inquiry_items/:id?fields=*,customer_id.*,sales_owner_id.*,buyer_owner_id.*,supplier_quotes.*,supplier_quotes.supplier_id.*,customer_quotes.*`。
 
-8. 询价项完整详情：询价项摘要接口，加 `GET /items/conversations?filter[inquiry_item_id][_eq]=$INQUIRY_ITEM_ID&sort=-created_at&fields=*,actor_id.*`。
+8. 询价项完整详情：询价项摘要接口，加
+   `GET /items/conversations?filter[inquiry_item_id][_eq]=$INQUIRY_ITEM_ID&sort=-created_at&fields=*,actor_id.*`。
 
 9. 客户 CRUD：`GET/POST/PATCH/DELETE /items/customers`。
 
@@ -76,7 +101,10 @@
 
 ## File Structure
 
-新增业务代码统一放在 `business-apps/` 下。本次采购报价前端放在 `business-apps/purchase-flow/web/`；后续通过同一个 Directus 承载更多业务项目时，按 `business-apps/<business-name>/web/`、`business-apps/<business-name>/scripts/`、`business-apps/<business-name>/extensions/` 继续扩展，避免新增业务代码散落在仓库根目录。
+新增业务代码统一放在 `business-apps/` 下。本次采购报价前端放在
+`business-apps/purchase-flow/web/`；后续通过同一个 Directus 承载更多业务项目时，按
+`business-apps/<business-name>/web/`、`business-apps/<business-name>/scripts/`、`business-apps/<business-name>/extensions/`
+继续扩展，避免新增业务代码散落在仓库根目录。
 
 - Create: `business-apps/purchase-flow/web/package.json`，独立前端应用包定义。
 - Create: `business-apps/purchase-flow/web/index.html`，Vite HTML 入口。
@@ -115,13 +143,16 @@
 
 当前用户明确要求“前端页面准备单独做一个，不做业务前端 Module”，所以方案从 Directus 内置 Module 改为独立 Vue 应用。
 
-独立前端的优势：界面和交互可以围绕采购报价任务重做，不受 Directus Admin 页面结构限制；可以使用更直接的任务、询价项、沟通工作流；后续也方便独立部署给业务用户使用。
+独立前端的优势：界面和交互可以围绕采购报价任务重做，不受 Directus
+Admin 页面结构限制；可以使用更直接的任务、询价项、沟通工作流；后续也方便独立部署给业务用户使用。
 
-独立前端的代价：需要自己处理登录、Token 刷新、权限失败、路由守卫、构建部署和后端地址配置。第一版通过复用 Directus `/auth/*` 和 `/items/*` 降低复杂度，不自建认证服务。
+独立前端的代价：需要自己处理登录、Token 刷新、权限失败、路由守卫、构建部署和后端地址配置。第一版通过复用 Directus
+`/auth/*` 和 `/items/*` 降低复杂度，不自建认证服务。
 
 ### Task 1: Scaffold Independent Purchase Web App
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/package.json`
 - Create: `business-apps/purchase-flow/web/index.html`
 - Create: `business-apps/purchase-flow/web/vite.config.ts`
@@ -144,8 +175,7 @@ Expected: FAIL because workspace package `@purchase-flow/web` does not exist.
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web build`
-Expected: FAIL with no matching workspace package.
+Run: `pnpm --filter @purchase-flow/web build` Expected: FAIL with no matching workspace package.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -195,16 +225,13 @@ packages:
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web build`
-Expected: PASS and creates `business-apps/purchase-flow/web/dist`.
+Run: `pnpm --filter @purchase-flow/web build` Expected: PASS and creates `business-apps/purchase-flow/web/dist`.
 
 - [ ] **Step 5: Refactor and verify**
 
 Keep the scaffold minimal. Do not add UI libraries before a concrete need exists.
 
-Run: `pnpm --filter @purchase-flow/web test`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test` Run: `pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -216,6 +243,7 @@ git commit -m "feat: scaffold purchase web app"
 ### Task 2: Add Auth and HTTP Client
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/api/http.ts`
 - Create: `business-apps/purchase-flow/web/src/api/auth.ts`
 - Create: `business-apps/purchase-flow/web/src/stores/auth.ts`
@@ -242,8 +270,8 @@ test('logs in and loads current user', async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/api/auth.test.ts`
-Expected: FAIL because auth client and store do not exist.
+Run: `pnpm --filter @purchase-flow/web test src/api/auth.test.ts` Expected: FAIL because auth client and store do not
+exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -259,15 +287,13 @@ Store tokens in `localStorage` and add Authorization header in an interceptor.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/api/auth.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/api/auth.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Add route guard: unauthenticated users go to `/login`; authenticated users cannot stay on `/login`.
 
-Run: `pnpm --filter @purchase-flow/web test src/api/auth.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
+Run: `pnpm --filter @purchase-flow/web test src/api/auth.test.ts` Run: `pnpm --filter @purchase-flow/web typecheck`
 Expected: all PASS.
 
 - [ ] **Step 6: Commit**
@@ -280,6 +306,7 @@ git commit -m "feat: add purchase web authentication"
 ### Task 3: Add Purchase Flow API Layer
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/types/purchase-flow.ts`
 - Create: `business-apps/purchase-flow/web/src/api/purchase-flow.ts`
 - Test: `business-apps/purchase-flow/web/src/api/purchase-flow.test.ts`
@@ -294,16 +321,19 @@ test('loads 询价项 summary from inquiry_items', async () => {
 
 	await get询价项Summary('inq-1');
 
-	expect(mockHttp.get).toHaveBeenCalledWith('/items/inquiry_items/inq-1', expect.objectContaining({
-		params: expect.objectContaining({ fields: expect.any(Array) }),
-	}));
+	expect(mockHttp.get).toHaveBeenCalledWith(
+		'/items/inquiry_items/inq-1',
+		expect.objectContaining({
+			params: expect.objectContaining({ fields: expect.any(Array) }),
+		}),
+	);
 });
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/api/purchase-flow.test.ts`
-Expected: FAIL because API layer does not exist.
+Run: `pnpm --filter @purchase-flow/web test src/api/purchase-flow.test.ts` Expected: FAIL because API layer does not
+exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -328,16 +358,14 @@ export async function commentAndUpdateState(payload: CommentAndStatePayload) {}
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/api/purchase-flow.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/api/purchase-flow.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Rename UI-facing type to `InquiryItem` so developers know 询价项 is an alias of `inquiry_items`.
 
-Run: `pnpm --filter @purchase-flow/web test src/api/purchase-flow.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test src/api/purchase-flow.test.ts` Run:
+`pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -349,6 +377,7 @@ git commit -m "feat: add purchase flow api client"
 ### Task 4: Implement Latest Step Utility
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/utils/latest-step.ts`
 - Test: `business-apps/purchase-flow/web/src/utils/latest-step.test.ts`
 
@@ -372,8 +401,8 @@ test('uses latest conversation as 询价项 latest step', () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/utils/latest-step.test.ts`
-Expected: FAIL because utility does not exist.
+Run: `pnpm --filter @purchase-flow/web test src/utils/latest-step.test.ts` Expected: FAIL because utility does not
+exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -390,16 +419,15 @@ export type LatestStep = {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/utils/latest-step.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/utils/latest-step.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
-Keep fallback copy explicit: `Assigned` means“等待采购员接单”，`Purchasing` means“采购处理中”，`WaitingSalesReview` means“等待外贸补充报价信息”。
+Keep fallback copy explicit: `Assigned` means“等待采购员接单”，`Purchasing` means“采购处理中”，`WaitingSalesReview`
+means“等待外贸补充报价信息”。
 
-Run: `pnpm --filter @purchase-flow/web test src/utils/latest-step.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test src/utils/latest-step.test.ts` Run:
+`pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -411,6 +439,7 @@ git commit -m "feat: derive 询价项 latest step"
 ### Task 5: Build App Shell and Task Page
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/components/app-shell.vue`
 - Create: `business-apps/purchase-flow/web/src/components/task-progress.vue`
 - Create: `business-apps/purchase-flow/web/src/views/tasks-view.vue`
@@ -436,25 +465,24 @@ test('shows buyer active tasks with latest step', async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/tasks-view.test.ts`
-Expected: FAIL because task page does not exist.
+Run: `pnpm --filter @purchase-flow/web test src/views/tasks-view.test.ts` Expected: FAIL because task page does not
+exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
-Render task list fields: `inquiry_no`、`询价项_name`、`product_name`、`brand`、`priority`、`state`、`assignment_deadline`、最新一步。
+Render task list fields:
+`inquiry_no`、`询价项_name`、`product_name`、`brand`、`priority`、`state`、`assignment_deadline`、最新一步。
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/tasks-view.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/tasks-view.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Add loading、empty、error states. Ensure mobile layout is usable.
 
-Run: `pnpm --filter @purchase-flow/web test src/views/tasks-view.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/tasks-view.test.ts` Run:
+`pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -466,6 +494,7 @@ git commit -m "feat: add purchase task page"
 ### Task 6: Build Customer and Supplier CRUD Pages
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/components/entity-crud-table.vue`
 - Create: `business-apps/purchase-flow/web/src/views/customers-view.vue`
 - Create: `business-apps/purchase-flow/web/src/views/suppliers-view.vue`
@@ -493,27 +522,27 @@ test('creates a customer', async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/customers-view.test.ts src/views/suppliers-view.test.ts`
-Expected: FAIL because pages do not exist.
+Run: `pnpm --filter @purchase-flow/web test src/views/customers-view.test.ts src/views/suppliers-view.test.ts` Expected:
+FAIL because pages do not exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
 Customer fields: `customer_code`、`customer_name`、`country`、`address`、`website`、`status`、`remark`。
 
-Supplier fields: `supplier_code`、`supplier_name`、`supplier_type`、`country`、`tax_rate`、`payment_term`、`website`、`status`、`remark`。
+Supplier fields:
+`supplier_code`、`supplier_name`、`supplier_type`、`country`、`tax_rate`、`payment_term`、`website`、`status`、`remark`。
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/customers-view.test.ts src/views/suppliers-view.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/customers-view.test.ts src/views/suppliers-view.test.ts` Expected:
+PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Keep shared table generic. Business labels remain in page files.
 
-Run: `pnpm --filter @purchase-flow/web test src/views/customers-view.test.ts src/views/suppliers-view.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/customers-view.test.ts src/views/suppliers-view.test.ts` Run:
+`pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -525,6 +554,7 @@ git commit -m "feat: add customer and supplier management"
 ### Task 7: Build 询价项 List and Summary Page
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/views/inquiry-items-view.vue`
 - Create: `business-apps/purchase-flow/web/src/views/inquiry-item-summary-view.vue`
 - Create: `business-apps/purchase-flow/web/src/components/inquiry-item-key-info.vue`
@@ -551,8 +581,8 @@ test('renders inquiry item as 询价项 summary', async () => {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-summary-view.test.ts`
-Expected: FAIL because 询价项 pages do not exist.
+Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-summary-view.test.ts` Expected: FAIL
+because 询价项 pages do not exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -568,16 +598,14 @@ Summary shows important inquiry fields and supplier quote highlights.
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-summary-view.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-summary-view.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Add clear link to完整详情页.
 
-Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-summary-view.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-summary-view.test.ts` Run:
+`pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -589,6 +617,7 @@ git commit -m "feat: add 询价项 summary pages"
 ### Task 8: Build Complete 询价项 Detail and Conversation Actions
 
 **Files:**
+
 - Create: `business-apps/purchase-flow/web/src/views/inquiry-item-detail-view.vue`
 - Create: `business-apps/purchase-flow/web/src/components/conversation-panel.vue`
 - Modify: `business-apps/purchase-flow/web/src/api/purchase-flow.ts`
@@ -610,17 +639,19 @@ test('adds conversation and sends 询价项 back to sales', async () => {
 	await wrapper.find('[name="state_action"]').setValue('WaitingSalesReview');
 	await wrapper.find('form').trigger('submit');
 
-	expect(mockCommentAndUpdateState).toHaveBeenCalledWith(expect.objectContaining({
-		state: 'WaitingSalesReview',
-		content: '请补充目标价',
-	}));
+	expect(mockCommentAndUpdateState).toHaveBeenCalledWith(
+		expect.objectContaining({
+			state: 'WaitingSalesReview',
+			content: '请补充目标价',
+		}),
+	);
 });
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-detail-view.test.ts`
-Expected: FAIL because detail page does not exist.
+Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-detail-view.test.ts` Expected: FAIL because detail
+page does not exist.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -647,16 +678,14 @@ const stateActions = [
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-detail-view.test.ts`
-Expected: PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-detail-view.test.ts` Expected: PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Submit success后重新加载 询价项详情。页面提示当前后端由前端串联两次请求，后续会补原子接口。
 
-Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-detail-view.test.ts`
-Run: `pnpm --filter @purchase-flow/web typecheck`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test src/views/inquiry-item-detail-view.test.ts` Run:
+`pnpm --filter @purchase-flow/web typecheck` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -668,6 +697,7 @@ git commit -m "feat: add 询价项 detail conversations"
 ### Task 9: Redirect Accept Endpoint to Independent Frontend
 
 **Files:**
+
 - Modify: `extensions/purchase-flow-accept/dist/index.js:99-102`
 - Optional Modify: `.env.example` if the 询价项 has one later
 
@@ -681,8 +711,9 @@ curl -i 'http://localhost:8055/purchase-flow-accept/accept?token=probe'
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `curl -i 'http://localhost:8055/purchase-flow-accept/accept?token=probe'`
-Expected: Endpoint exists and returns `PURCHASE_FLOW_ACCEPT_ERROR` for invalid token; with a valid token it currently redirects to `/admin/content/inquiry_items/:id`.
+Run: `curl -i 'http://localhost:8055/purchase-flow-accept/accept?token=probe'` Expected: Endpoint exists and returns
+`PURCHASE_FLOW_ACCEPT_ERROR` for invalid token; with a valid token it currently redirects to
+`/admin/content/inquiry_items/:id`.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -695,16 +726,14 @@ function redirectToInquiry(res, env, inquiryItemId) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `curl -i 'http://localhost:8055/purchase-flow-accept/accept?token=probe'`
-Expected: invalid token still returns structured error. With a valid token, redirect location is `${PUBLIC_PURCHASE_APP_URL}/inquiry-items/:id/detail`.
+Run: `curl -i 'http://localhost:8055/purchase-flow-accept/accept?token=probe'` Expected: invalid token still returns
+structured error. With a valid token, redirect location is `${PUBLIC_PURCHASE_APP_URL}/inquiry-items/:id/detail`.
 
 - [ ] **Step 5: Refactor and verify**
 
 Do not change token validation logic.
 
-Run: `pnpm --filter @purchase-flow/web test`
-Run: `pnpm --filter @purchase-flow/web build`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test` Run: `pnpm --filter @purchase-flow/web build` Expected: all PASS.
 
 - [ ] **Step 6: Commit**
 
@@ -716,6 +745,7 @@ git commit -m "feat: redirect accepted inquiries to purchase app"
 ### Task 10: Final Verification and Documentation
 
 **Files:**
+
 - Modify: `purchase-flow-implementation.md`
 - Optional Create: `.changeset/<generated-name>.md` if this is prepared as a release PR
 
@@ -732,9 +762,7 @@ pnpm format
 
 - [ ] **Step 2: Run checks before final edits**
 
-Run: `pnpm --filter @purchase-flow/web test`
-Run: `pnpm --filter @purchase-flow/web build`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test` Run: `pnpm --filter @purchase-flow/web build` Expected: all PASS.
 
 - [ ] **Step 3: Write minimal documentation update**
 
@@ -754,19 +782,14 @@ Append:
 
 - [ ] **Step 4: Run checks after final edits**
 
-Run: `pnpm --filter @purchase-flow/web test`
-Run: `pnpm --filter @purchase-flow/web build`
-Run: `pnpm lint`
-Run: `pnpm format`
-Expected: all PASS.
+Run: `pnpm --filter @purchase-flow/web test` Run: `pnpm --filter @purchase-flow/web build` Run: `pnpm lint` Run:
+`pnpm format` Expected: all PASS.
 
 - [ ] **Step 5: Refactor and verify**
 
 Remove unused imports and placeholder copy. Confirm no valid tests were weakened.
 
-Run: `git status --short`
-Run: `git diff --name-only main...HEAD`
-Expected: only planned files changed.
+Run: `git status --short` Run: `git diff --name-only main...HEAD` Expected: only planned files changed.
 
 - [ ] **Step 6: Commit**
 
@@ -779,7 +802,8 @@ git commit -m "docs: document purchase web app"
 
 1. 新增 `GET /purchase-flow/inquiry-items/:id` 聚合接口，但内部继续以 `inquiry_items.id` 为 询价项 主键。
 
-2. 新增 `POST /purchase-flow/inquiry-items/:id/conversations` 原子接口，支持创建沟通记录并可选更新 `inquiry_items.state`。
+2. 新增 `POST /purchase-flow/inquiry-items/:id/conversations` 原子接口，支持创建沟通记录并可选更新
+   `inquiry_items.state`。
 
 3. 增加 `RequoteRequested` 状态，或明确“再次报价”使用 `Purchasing` 的业务含义，并同步任务统计、权限、中文翻译。
 

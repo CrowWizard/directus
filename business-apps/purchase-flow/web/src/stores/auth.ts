@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
-
-import { getCurrentUser, login as loginRequest, logout as logoutRequest, type DirectusUser } from '../api/auth';
+import { type DirectusUser, getCurrentUser, login as loginRequest, logout as logoutRequest } from '../api/auth';
 import { ACCESS_TOKEN_KEY } from '../api/http';
 
 export type RoleScope = 'Sales' | 'Buyer' | 'Manager' | 'Unknown';

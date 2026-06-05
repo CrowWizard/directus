@@ -1,5 +1,4 @@
 import { describe, expect, test } from 'vitest';
-
 import { getLatestStep } from './latest-step';
 
 describe('getLatestStep', () => {

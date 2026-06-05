@@ -1,8 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import { http } from './http';
 import { useAuthStore } from '../stores/auth';
+import { http } from './http';
 
 vi.mock('./http', () => ({
 	ACCESS_TOKEN_KEY: 'purchase-flow.access-token',

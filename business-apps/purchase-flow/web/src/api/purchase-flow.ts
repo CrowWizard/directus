@@ -1,4 +1,3 @@
-import { http } from './http';
 import type {
 	CommentAndStatePayload,
 	Conversation,
@@ -14,6 +13,7 @@ import type {
 	SupplierPayload,
 	SupplierQuote,
 } from '../types/purchase-flow';
+import { http } from './http';
 
 const summaryFields = [
 	'*',
@@ -25,7 +25,17 @@ const summaryFields = [
 	'customer_quotes.*',
 ];
 
-const listFields = ['id', 'inquiry_no', 'inquiry_item_name', 'product_name', 'brand', 'priority', 'state', 'assignment_deadline', 'updated_at'];
+const listFields = [
+	'id',
+	'inquiry_no',
+	'inquiry_item_name',
+	'product_name',
+	'brand',
+	'priority',
+	'state',
+	'assignment_deadline',
+	'updated_at',
+];
 
 function unwrap<T>(response: { data: { data: T } }) {
 	return response.data.data;
@@ -45,7 +55,11 @@ function getTaskFilter(roleScope: RoleScope, userId: string) {
 
 export async function getTasks(roleScope: RoleScope, userId: string) {
 	const response = await http.get<{ data: InquiryItem[] }>('/items/inquiry_items', {
-		params: { fields: listFields, filter: getTaskFilter(roleScope, userId), sort: ['assignment_deadline', '-updated_at'] },
+		params: {
+			fields: listFields,
+			filter: getTaskFilter(roleScope, userId),
+			sort: ['assignment_deadline', '-updated_at'],
+		},
 	});
 
 	return unwrap(response);

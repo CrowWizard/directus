@@ -1,9 +1,8 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import CustomersView from './customers-view.vue';
 import { createCustomer, deleteCustomer, listCustomers, updateCustomer } from '../api/purchase-flow';
+import CustomersView from './customers-view.vue';
 
 vi.mock('../api/purchase-flow', () => ({
 	createCustomer: vi.fn(),
@@ -12,7 +11,10 @@ vi.mock('../api/purchase-flow', () => ({
 	updateCustomer: vi.fn(),
 }));
 
-vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+vi.mock('vue-router', async (importOriginal) => ({
+	...(await importOriginal<typeof import('vue-router')>()),
+	useRouter: () => ({ push: vi.fn() }),
+}));
 
 describe('CustomersView', () => {
 	beforeEach(() => {

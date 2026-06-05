@@ -1,3 +1,16 @@
+<script setup lang="ts">
+import type { Supplier, SupplierQuote } from '../types/purchase-flow';
+
+defineProps<{ quotes: SupplierQuote[] }>();
+
+function supplierName(supplier: SupplierQuote['supplier_id']) {
+	if (!supplier) return '-';
+	if (typeof supplier === 'string') return supplier;
+
+	return (supplier as Supplier).supplier_name || (supplier as Supplier).supplier_code || '-';
+}
+</script>
+
 <template>
 	<section class="info-card">
 		<h3>供应商报价重点</h3>
@@ -24,16 +37,3 @@
 		</table>
 	</section>
 </template>
-
-<script setup lang="ts">
-import type { Supplier, SupplierQuote } from '../types/purchase-flow';
-
-defineProps<{ quotes: SupplierQuote[] }>();
-
-function supplierName(supplier: SupplierQuote['supplier_id']) {
-	if (!supplier) return '-';
-	if (typeof supplier === 'string') return supplier;
-
-	return (supplier as Supplier).supplier_name || (supplier as Supplier).supplier_code || '-';
-}
-</script>

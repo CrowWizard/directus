@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-
 import { http } from './http';
 import { commentAndUpdateState, getTasks, get询价项Summary } from './purchase-flow';
 
@@ -63,7 +62,11 @@ describe('purchase flow api', () => {
 			state: 'WaitingSalesReview',
 		});
 
-		expect(mockHttp.post).toHaveBeenCalledWith('/items/conversations', expect.objectContaining({ content: '请补充目标价' }));
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/items/conversations',
+			expect.objectContaining({ content: '请补充目标价' }),
+		);
+
 		expect(mockHttp.patch).toHaveBeenCalledWith('/items/inquiry_items/inq-1', { state: 'WaitingSalesReview' });
 	});
 });
