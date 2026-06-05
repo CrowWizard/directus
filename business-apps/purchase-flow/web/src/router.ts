@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 
 import { useAuthStore } from './stores/auth';
 import CustomersView from './views/customers-view.vue';
+import InquiryItemDetailView from './views/inquiry-item-detail-view.vue';
 import InquiryItemSummaryView from './views/inquiry-item-summary-view.vue';
 import InquiryItemsView from './views/inquiry-items-view.vue';
 import LoginView from './views/login-view.vue';
@@ -16,6 +17,7 @@ export const router = createRouter({
 		{ path: '/customers', component: CustomersView },
 		{ path: '/inquiry-items', component: InquiryItemsView },
 		{ path: '/inquiry-items/:id', component: InquiryItemSummaryView },
+		{ path: '/inquiry-items/:id/detail', component: InquiryItemDetailView },
 		{ path: '/suppliers', component: SuppliersView },
 		{ path: '/tasks', component: TasksView },
 	],
