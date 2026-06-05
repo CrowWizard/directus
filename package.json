@@ -8,6 +8,9 @@
 		"format": "prettier --cache --check .",
 		"lint": "eslint --cache .",
 		"lint:style": "stylelint '**/*.{css,scss,vue}' --ignore-path .gitignore --cache",
+		"purchase-flow:web:build": "pnpm --filter @purchase-flow/web build",
+		"purchase-flow:web:dev": "pnpm --filter @purchase-flow/web dev",
+		"purchase-flow:web:test": "pnpm --filter @purchase-flow/web test",
 		"test": "pnpm --recursive --filter '!tests-blackbox' test",
 		"test:blackbox": "rimraf ./dist && pnpm --filter directus deploy --legacy --prod dist && pnpm --filter tests-blackbox test",
 		"test:coverage": "pnpm --recursive --filter '!tests-blackbox' test:coverage"

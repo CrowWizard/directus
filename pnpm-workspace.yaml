@@ -3,6 +3,7 @@ packages:
   - app
   - api
   - sdk
+  - business-apps/*/web
   - packages/*
   - tests/*
 

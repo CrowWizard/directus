@@ -1,0 +1,26 @@
+{
+	"name": "@purchase-flow/web",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "vite --host 0.0.0.0",
+		"build": "vue-tsc --noEmit && vite build",
+		"test": "vitest run",
+		"typecheck": "vue-tsc --noEmit"
+	},
+	"dependencies": {
+		"@vitejs/plugin-vue": "catalog:",
+		"axios": "catalog:",
+		"pinia": "catalog:",
+		"typescript": "catalog:",
+		"vite": "7.3.2",
+		"vitest": "catalog:",
+		"vue": "catalog:",
+		"vue-router": "catalog:",
+		"vue-tsc": "catalog:"
+	},
+	"devDependencies": {
+		"@vue/test-utils": "catalog:",
+		"happy-dom": "catalog:"
+	}
+}

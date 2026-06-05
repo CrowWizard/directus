@@ -1,0 +1,31 @@
+body {
+	margin: 0;
+	color: #172033;
+	font-family:
+		Inter,
+		"PingFang SC",
+		"Microsoft YaHei",
+		sans-serif;
+	background: #f6f7fb;
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+}
+
+a {
+	color: inherit;
+}
+
+.page-card {
+	box-sizing: border-box;
+	width: min(960px, calc(100vw - 32px));
+	margin: 48px auto;
+	padding: 32px;
+	border-radius: 20px;
+	background: #fff;
+	box-shadow: 0 24px 60px rgb(34 45 72 / 8%);
+}
