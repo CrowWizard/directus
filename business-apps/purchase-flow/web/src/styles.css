@@ -29,3 +29,73 @@ a {
 	background: #fff;
 	box-shadow: 0 24px 60px rgb(34 45 72 / 8%);
 }
+
+.login-page {
+	display: grid;
+	min-height: 100vh;
+	place-items: center;
+	padding: 24px;
+	background: linear-gradient(145deg, #172033, #27446f 56%, #eef3ff 56%);
+}
+
+.login-card {
+	box-sizing: border-box;
+	width: min(440px, 100%);
+	padding: 36px;
+	border-radius: 28px;
+	background: rgb(255 255 255 / 96%);
+	box-shadow: 0 30px 90px rgb(15 23 42 / 22%);
+}
+
+.eyebrow {
+	margin: 0 0 8px;
+	color: #5266ff;
+	font-weight: 700;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.muted {
+	color: #657084;
+}
+
+.error {
+	color: #b42318;
+}
+
+form,
+label {
+	display: grid;
+	gap: 12px;
+}
+
+form {
+	margin-top: 28px;
+	gap: 18px;
+}
+
+input,
+select,
+textarea {
+	box-sizing: border-box;
+	width: 100%;
+	padding: 11px 12px;
+	border: 1px solid #d8deea;
+	border-radius: 12px;
+	background: #fff;
+}
+
+button {
+	padding: 12px 16px;
+	border: 0;
+	border-radius: 12px;
+	color: #fff;
+	font-weight: 700;
+	cursor: pointer;
+	background: #2f5cff;
+}
+
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.65;
+}
