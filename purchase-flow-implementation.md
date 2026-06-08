@@ -406,7 +406,8 @@ GET /purchase-flow-accept/accept?token=xxx
 - `scripts/init-purchase-flow.sh`
   - 总入口。
   - 执行集合、关系、权限、优先级规则、翻译、Hook、Endpoint、可选 Flow。
-  - 已部署环境不建议随便重跑全量。
+  - 适合新环境初始化或确认幂等的基础配置重跑。
+  - 已部署环境不建议把字段升级都放到全量初始化里执行；字段新增、字段属性调整、权限细化等后续变更应新增独立增量脚本。
 
 - `scripts/init-purchase-flow-collections.sh`
   - 创建业务集合和字段。
@@ -448,11 +449,13 @@ GET /purchase-flow-accept/accept?token=xxx
 - `scripts/install-purchase-flow-auto-id-hook.sh`
   - 安装 Hook。
   - 标准 Directus 扩展格式：`extensions/purchase-flow-auto-id/package.json` + `dist/index.js`。
+  - 当前脚本只从 `extensions/purchase-flow-auto-id` 复制真实扩展包，不再内嵌 JS 代码。
   - 功能：自动 UUID、自动分配、设置超时/提醒、生成 Token、企业微信通知、刷新任务统计。
 
 - `scripts/install-purchase-flow-accept-endpoint.sh`
   - 安装 Endpoint。
   - 标准 Directus 扩展格式：`extensions/purchase-flow-accept/package.json` + `dist/index.js`。
+  - 当前脚本只从 `extensions/purchase-flow-accept` 复制真实扩展包，不再内嵌 JS 代码。
   - 提供接单链接接口。
 
 ## Directus 扩展目录注意事项

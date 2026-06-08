@@ -1,24 +1,71 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { getTasks } from '../api/purchase-flow';
+import { createInquiryItem, listInquiryItems } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
+import InquiryItemForm from '../components/inquiry-item-form.vue';
 import { useAuthStore } from '../stores/auth';
-import type { InquiryItem } from '../types/purchase-flow';
+import type { InquiryItemRow } from '../types/purchase-flow';
 
 const auth = useAuthStore();
-const items = ref<InquiryItem[]>([]);
+const items = ref<InquiryItemRow[]>([]);
 const loading = ref(true);
 const error = ref('');
+const showForm = ref(false);
+const submitting = ref(false);
+const formVersion = ref(0);
 
-onMounted(async () => {
+const requestController = new AbortController();
+
+function userName(
+	user?: { first_name?: string | null; last_name?: string | null } | string | null,
+): string {
+	if (!user || typeof user === 'string') return '-';
+	return [user.first_name, user.last_name].filter(Boolean).join(' ') || '-';
+}
+
+function customerName(customer?: { customer_name?: string } | string | null): string {
+	if (!customer || typeof customer === 'string') return '-';
+	return customer.customer_name || '-';
+}
+
+async function load(signal: AbortSignal) {
+	loading.value = true;
+	error.value = '';
+
 	try {
-		items.value = await getTasks(auth.roleScope, auth.currentUser?.id || '');
+		items.value = await listInquiryItems(signal);
 	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
 		error.value = err instanceof Error ? err.message : '询价项加载失败';
 	} finally {
 		loading.value = false;
 	}
+}
+
+async function handleCreate(payload: Record<string, unknown>) {
+	submitting.value = true;
+	error.value = '';
+
+	try {
+		await createInquiryItem(payload, requestController.signal);
+		formVersion.value += 1;
+		showForm.value = false;
+		await load(requestController.signal);
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		error.value = err instanceof Error ? err.message : '创建询价项失败';
+	} finally {
+		submitting.value = false;
+	}
+}
+
+onMounted(() => {
+	load(requestController.signal);
+});
+
+onUnmounted(() => {
+	requestController.abort();
 });
 </script>
 
@@ -29,16 +76,60 @@ onMounted(async () => {
 				<p class="eyebrow">Inquiry Items</p>
 				<h2>询价项列表</h2>
 			</div>
+			<button v-if="!showForm && auth.roleScope === 'Sales'" type="button" class="ghost-button" @click="showForm = true">
+				+ 新增询价项
+			</button>
 		</section>
-		<p v-if="loading" class="state-card">正在加载询价项...</p>
-		<p v-else-if="error" class="state-card error">{{ error }}</p>
-		<div v-else class="task-grid">
-			<article v-for="item in items" :key="item.id" class="task-card">
-				<p class="muted">{{ item.inquiry_no || item.id }}</p>
-				<h3>{{ item.product_name || item.inquiry_item_name || '未命名询价项' }}</h3>
-				<p>{{ item.brand || '-' }} / {{ item.state }}</p>
-				<RouterLink class="text-link" :to="`/inquiry-items/${item.id}`">查看摘要</RouterLink>
-			</article>
+
+		<InquiryItemForm
+			v-if="showForm"
+			:submitting="submitting"
+			:sales-owner-id="auth.currentUser?.id || ''"
+			:reset-key="formVersion"
+			@submit="handleCreate"
+			@cancel="showForm = false"
+		/>
+
+		<p v-if="error && !showForm" class="state-card error" role="status" aria-live="polite">{{ error }}</p>
+		<p v-if="loading" class="state-card" role="status" aria-live="polite" aria-busy="true">正在加载询价项...</p>
+		<p v-else-if="items.length === 0 && !showForm" class="state-card" role="status" aria-live="polite">暂无询价项</p>
+		<div v-else class="table-card">
+			<table>
+				<thead>
+					<tr>
+						<th scope="col">询价号</th>
+						<th scope="col">产品</th>
+						<th scope="col">品牌/型号</th>
+						<th scope="col">数量</th>
+						<th scope="col">优先级</th>
+						<th scope="col">状态</th>
+						<th scope="col">客户</th>
+						<th scope="col">外贸员</th>
+						<th scope="col">采购员</th>
+						<th scope="col">截止时间</th>
+						<th scope="col">更新时间</th>
+						<th scope="col">操作</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="item in items" :key="item.id">
+						<td>{{ item.inquiry_no || item.id }}</td>
+						<td>{{ item.product_name || '-' }}</td>
+						<td>{{ item.brand || '-' }} / {{ item.model || '-' }}</td>
+						<td class="cell-numeric">{{ item.quantity ?? '-' }} {{ item.unit || '' }}</td>
+						<td>{{ item.priority || '-' }}</td>
+						<td>{{ item.state }}</td>
+						<td>{{ customerName(item.customer_id) }}</td>
+						<td>{{ userName(item.sales_owner_id) }}</td>
+						<td>{{ userName(item.buyer_owner_id) }}</td>
+						<td>{{ item.assignment_deadline || '-' }}</td>
+						<td>{{ item.updated_at || '-' }}</td>
+						<td class="row-actions">
+							<RouterLink class="text-link" :to="`/inquiry-items/${item.id}/detail`">详情</RouterLink>
+						</td>
+					</tr>
+				</tbody>
+			</table>
 		</div>
 	</AppShell>
 </template>

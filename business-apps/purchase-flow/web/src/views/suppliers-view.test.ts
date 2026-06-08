@@ -33,25 +33,27 @@ describe('SuppliersView', () => {
 		await wrapper.find('[name="supplier_name"]').setValue('Best Supplier');
 		await wrapper.find('form').trigger('submit');
 
-		expect(createSupplier).toHaveBeenCalledWith(expect.objectContaining({ supplier_name: 'Best Supplier' }));
+		expect(createSupplier).toHaveBeenCalledWith(expect.objectContaining({ supplier_name: 'Best Supplier' }), expect.anything());
 	});
 
 	test('updates and deletes a supplier', async () => {
-		vi.mocked(listSuppliers).mockResolvedValue([{ id: 'supplier-1', supplier_name: 'Best Supplier' }]);
-		vi.mocked(updateSupplier).mockResolvedValue({ id: 'supplier-1', supplier_name: 'Better Supplier' });
+		vi.mocked(listSuppliers).mockResolvedValue([{ id: 'supplier-1', supplier_name: 'Best' }]);
+		vi.mocked(updateSupplier).mockResolvedValue({ id: 'supplier-1', supplier_name: 'Best Co' });
 
 		const wrapper = mount(SuppliersView, { global });
 		await flushPromises();
 		await wrapper.find('[data-test="edit-supplier-1"]').trigger('click');
-		await wrapper.find('[name="supplier_name"]').setValue('Better Supplier');
+		await wrapper.find('[name="supplier_name"]').setValue('Best Co');
 		await wrapper.find('form').trigger('submit');
+		await flushPromises();
 		await wrapper.find('[data-test="delete-supplier-1"]').trigger('click');
+		await flushPromises();
 
 		expect(updateSupplier).toHaveBeenCalledWith(
 			'supplier-1',
-			expect.objectContaining({ supplier_name: 'Better Supplier' }),
+			expect.objectContaining({ supplier_name: 'Best Co' }),
+			expect.anything(),
 		);
-
-		expect(deleteSupplier).toHaveBeenCalledWith('supplier-1');
+		expect(deleteSupplier).toHaveBeenCalledWith('supplier-1', expect.anything());
 	});
 });

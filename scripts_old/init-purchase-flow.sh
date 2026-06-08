@@ -4,14 +4,10 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "开始初始化外贸询价采购报价系统。"
-echo "提示：本脚本适合新环境或幂等基础配置重跑；字段结构升级建议新增专门增量脚本，避免覆盖线上配置。"
-
 "${SCRIPT_DIR}/init-purchase-flow-collections.sh"
 "${SCRIPT_DIR}/init-purchase-flow-relations.sh"
 "${SCRIPT_DIR}/init-purchase-flow-permissions.sh"
 "${SCRIPT_DIR}/init-purchase-flow-assignment-rules.sh"
-"${SCRIPT_DIR}/init-purchase-flow-translations.sh"
 "${SCRIPT_DIR}/install-purchase-flow-auto-id-hook.sh"
 "${SCRIPT_DIR}/install-purchase-flow-accept-endpoint.sh"
 

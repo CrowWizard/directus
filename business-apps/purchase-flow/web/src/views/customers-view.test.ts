@@ -33,7 +33,7 @@ describe('CustomersView', () => {
 		await wrapper.find('[name="customer_name"]').setValue('ACME');
 		await wrapper.find('form').trigger('submit');
 
-		expect(createCustomer).toHaveBeenCalledWith(expect.objectContaining({ customer_name: 'ACME' }));
+		expect(createCustomer).toHaveBeenCalledWith(expect.objectContaining({ customer_name: 'ACME' }), expect.anything());
 	});
 
 	test('updates and deletes a customer', async () => {
@@ -45,9 +45,15 @@ describe('CustomersView', () => {
 		await wrapper.find('[data-test="edit-customer-1"]').trigger('click');
 		await wrapper.find('[name="customer_name"]').setValue('ACME CN');
 		await wrapper.find('form').trigger('submit');
+		await flushPromises();
 		await wrapper.find('[data-test="delete-customer-1"]').trigger('click');
+		await flushPromises();
 
-		expect(updateCustomer).toHaveBeenCalledWith('customer-1', expect.objectContaining({ customer_name: 'ACME CN' }));
-		expect(deleteCustomer).toHaveBeenCalledWith('customer-1');
+		expect(updateCustomer).toHaveBeenCalledWith(
+			'customer-1',
+			expect.objectContaining({ customer_name: 'ACME CN' }),
+			expect.anything(),
+		);
+		expect(deleteCustomer).toHaveBeenCalledWith('customer-1', expect.anything());
 	});
 });

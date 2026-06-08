@@ -14,7 +14,7 @@ defineProps<{ item: InquiryItem }>();
 			</div>
 			<div>
 				<dt>产品</dt>
-				<dd>{{ item.product_name || item.inquiry_item_name || '-' }}</dd>
+				<dd>{{ item.product_name || item.inquiry_no || '-' }}</dd>
 			</div>
 			<div>
 				<dt>品牌</dt>

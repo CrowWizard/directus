@@ -55,6 +55,7 @@ describe('InquiryItemDetailView', () => {
 				content: '请补充目标价',
 				state: 'WaitingSalesReview',
 			}),
+			expect.anything(),
 		);
 	});
 });

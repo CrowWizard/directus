@@ -1,26 +1,28 @@
 {
 	"name": "@purchase-flow/web",
 	"private": true,
+	"version": "0.1.0",
 	"type": "module",
 	"scripts": {
 		"dev": "vite --host 0.0.0.0",
 		"build": "vue-tsc --noEmit && vite build",
+		"preview": "vite preview --host 0.0.0.0 --port 5173",
 		"test": "vitest run",
 		"typecheck": "vue-tsc --noEmit"
 	},
 	"dependencies": {
-		"@vitejs/plugin-vue": "catalog:",
-		"axios": "catalog:",
-		"pinia": "catalog:",
-		"typescript": "catalog:",
-		"vite": "7.3.2",
-		"vitest": "catalog:",
-		"vue": "catalog:",
-		"vue-router": "catalog:",
-		"vue-tsc": "catalog:"
+		"axios": "1.7.7",
+		"pinia": "2.3.1",
+		"vue": "3.5.24",
+		"vue-router": "4.5.0"
 	},
 	"devDependencies": {
-		"@vue/test-utils": "catalog:",
-		"happy-dom": "catalog:"
+		"@vitejs/plugin-vue": "5.2.1",
+		"@vue/test-utils": "2.4.6",
+		"happy-dom": "15.11.7",
+		"typescript": "5.6.3",
+		"vite": "7.3.2",
+		"vitest": "3.2.4",
+		"vue-tsc": "2.1.10"
 	}
 }

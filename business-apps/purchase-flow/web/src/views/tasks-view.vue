@@ -1,20 +1,21 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { getTasks, get询价项Detail } from '../api/purchase-flow';
+import { getTasksWithDetails, type TaskWithDetail } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
 import TaskProgress from '../components/task-progress.vue';
 import { useAuthStore } from '../stores/auth';
-import type { InquiryItem } from '../types/purchase-flow';
-import { getLatestStep, type LatestStep } from '../utils/latest-step';
+import type { LatestStep } from '../utils/latest-step';
 
 const auth = useAuthStore();
-const tasks = ref<InquiryItem[]>([]);
+const tasks = ref<TaskWithDetail[]>([]);
 const latestSteps = ref<Record<string, LatestStep>>({});
 const loading = ref(true);
 const error = ref('');
 
-async function loadTasks() {
+const requestController = new AbortController();
+
+async function loadTasks(signal: AbortSignal) {
 	if (!auth.currentUser?.id) {
 		error.value = '无法识别当前用户，请重新登录。';
 		loading.value = false;
@@ -25,29 +26,25 @@ async function loadTasks() {
 	error.value = '';
 
 	try {
-		tasks.value = await getTasks(auth.roleScope, auth.currentUser.id);
+		const result = await getTasksWithDetails(auth.roleScope, auth.currentUser.id, signal);
 
-		const details = await Promise.all(tasks.value.map((task) => get询价项Detail(task.id)));
-
-		latestSteps.value = Object.fromEntries(
-			details.map((detail) => [
-				detail.id,
-				getLatestStep({
-					询价项: detail,
-					conversations: detail.conversations,
-					customerQuotes: detail.customer_quotes,
-					supplierQuotes: detail.supplier_quotes,
-				}),
-			]),
-		);
+		tasks.value = result.tasks;
+		latestSteps.value = result.latestSteps;
 	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
 		error.value = err instanceof Error ? err.message : '任务加载失败';
 	} finally {
 		loading.value = false;
 	}
 }
 
-onMounted(loadTasks);
+onMounted(() => {
+	loadTasks(requestController.signal);
+});
+
+onUnmounted(() => {
+	requestController.abort();
+});
 </script>
 
 <template>
@@ -60,16 +57,16 @@ onMounted(loadTasks);
 			<p class="muted">基于当前角色直接查询 inquiry_items，不依赖摘要 JSON。</p>
 		</section>
 
-		<p v-if="loading" class="state-card">正在加载任务...</p>
-		<p v-else-if="error" class="state-card error">{{ error }}</p>
-		<p v-else-if="tasks.length === 0" class="state-card">暂无待处理任务。</p>
+		<p v-if="loading" class="state-card" role="status" aria-live="polite" aria-busy="true">正在加载任务...</p>
+		<p v-else-if="error" class="state-card error" role="status" aria-live="polite">{{ error }}</p>
+		<p v-else-if="tasks.length === 0" class="state-card" role="status" aria-live="polite">暂无待处理任务</p>
 
 		<div v-else class="task-grid">
 			<article v-for="task in tasks" :key="task.id" class="task-card">
 				<div class="task-card__top">
 					<div>
 						<p class="muted">{{ task.inquiry_no || task.id }}</p>
-						<h3>{{ task.inquiry_item_name || task.询价项_name || task.product_name || '未命名询价项' }}</h3>
+						<h3>{{ task.product_name || task.inquiry_no || '未命名询价项' }}</h3>
 					</div>
 					<TaskProgress :state="task.state" />
 				</div>

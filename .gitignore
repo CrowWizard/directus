@@ -45,6 +45,11 @@ TODO
 *.db
 /schema.yaml
 /schema.json
+/extensions/
+!/extensions/
+!/extensions/**
+!/extensions/**/dist/
+!/extensions/**/dist/**
 /api/uploads/
 /api/extensions/
 /tests/blackbox/uploads/

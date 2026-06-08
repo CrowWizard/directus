@@ -18,11 +18,11 @@ function supplierName(supplier: SupplierQuote['supplier_id']) {
 		<table v-else>
 			<thead>
 				<tr>
-					<th>供应商</th>
-					<th>报价</th>
-					<th>MOQ</th>
-					<th>交期</th>
-					<th>报价时间</th>
+					<th scope="col">供应商</th>
+					<th scope="col">报价</th>
+					<th scope="col">MOQ</th>
+					<th scope="col">交期</th>
+					<th scope="col">报价时间</th>
 				</tr>
 			</thead>
 			<tbody>

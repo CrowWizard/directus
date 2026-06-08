@@ -29,6 +29,7 @@ export type Supplier = {
 
 export type SupplierQuote = {
 	id?: string;
+	inquiry_item_id?: string;
 	supplier_id?: Supplier | string | null;
 	quoted_by?: DirectusUser | string | null;
 	price?: number | string | null;
@@ -41,6 +42,7 @@ export type SupplierQuote = {
 
 export type CustomerQuote = {
 	id?: string;
+	inquiry_item_id?: string;
 	customer_id?: Customer | string | null;
 	quoted_by?: DirectusUser | string | null;
 	price?: number | string | null;
@@ -61,10 +63,13 @@ export type Conversation = {
 export type InquiryItem = {
 	id: string;
 	inquiry_no?: string;
-	inquiry_item_name?: string;
-	询价项_name?: string;
 	product_name?: string;
+	project_name?: string;
 	brand?: string;
+	model?: string;
+	specification?: string;
+	quantity?: number | null;
+	unit?: string;
 	priority?: string;
 	state: InquiryState;
 	assignment_deadline?: string | null;
@@ -77,10 +82,33 @@ export type InquiryItem = {
 	customer_quotes?: CustomerQuote[];
 };
 
+export type InquiryItemRow = InquiryItem & {
+	customer_id?: { customer_name?: string } | string | null;
+	sales_owner_id?: { first_name?: string | null; last_name?: string | null } | string | null;
+	buyer_owner_id?: { first_name?: string | null; last_name?: string | null } | string | null;
+};
+
 export type InquiryItemDetail = InquiryItem & {
 	conversations: Conversation[];
 	supplier_quotes: SupplierQuote[];
 	customer_quotes: CustomerQuote[];
+};
+
+export type InquiryItemPayload = {
+	customer_id?: string | null;
+	project_name?: string;
+	product_name?: string;
+	brand?: string;
+	model?: string;
+	specification?: string;
+	quantity?: number | null;
+	unit?: string;
+	target_price?: number | string | null;
+	priority?: string;
+	sales_owner_id?: string;
+	buyer_owner_id?: string | null;
+	remark?: string;
+	tags?: string;
 };
 
 export type CustomerPayload = Omit<Partial<Customer>, 'id'>;

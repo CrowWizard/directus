@@ -13,19 +13,20 @@ async function signOut() {
 
 <template>
 	<div class="app-shell">
+		<a class="skip-link" href="#main">跳到主内容</a>
 		<aside class="sidebar">
 			<div>
 				<p class="eyebrow">Purchase Flow</p>
 				<h1>采购报价</h1>
 			</div>
-			<nav>
+			<nav aria-label="主导航">
 				<RouterLink to="/tasks">我的任务</RouterLink>
 				<RouterLink to="/customers">客户管理</RouterLink>
 				<RouterLink to="/suppliers">供应商管理</RouterLink>
 				<RouterLink to="/inquiry-items">询价项</RouterLink>
 			</nav>
 		</aside>
-		<main class="content-panel">
+		<main id="main" class="content-panel" tabindex="-1">
 			<header class="topbar">
 				<div>
 					<p class="muted">当前用户</p>
