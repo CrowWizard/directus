@@ -30,11 +30,17 @@ function customerName(customer?: { customer_name?: string } | string | null): st
 }
 
 async function load(signal: AbortSignal) {
+	if (!auth.currentUser?.id) {
+		error.value = '无法识别当前用户，请重新登录。';
+		loading.value = false;
+		return;
+	}
+
 	loading.value = true;
 	error.value = '';
 
 	try {
-		items.value = await listInquiryItems(signal);
+		items.value = await listInquiryItems(auth.roleScope, auth.currentUser.id, signal);
 	} catch (err) {
 		if (err instanceof Error && err.name === 'CanceledError') return;
 		error.value = err instanceof Error ? err.message : '询价项加载失败';

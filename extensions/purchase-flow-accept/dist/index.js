@@ -5,74 +5,96 @@ export default (router, context) => {
 
   router.get('/accept', async (req, res, next) => {
     try {
-      const token = String(req.query.token ?? '');
-
-      if (!token) {
-        return sendError(res, 400, '缺少接单 Token。');
-      }
-
-      const userId = req.accountability?.user;
-
-      if (!userId) {
-        return sendError(res, 401, '请先登录后再开始处理询价项。');
-      }
-
-      const tokenHash = hashToken(token);
-      const acceptToken = await getAcceptToken(database, tokenHash);
-
-      if (!acceptToken) {
-        return sendError(res, 403, '接单链接无效或已失效。');
-      }
-
-      if (!safeEqual(tokenHash, acceptToken.token_hash)) {
-        return sendError(res, 403, '接单链接校验失败。');
-      }
-
-      if (acceptToken.used_at) {
-        return redirectToInquiry(res, env, acceptToken.inquiry_item_id);
-      }
-
-      if (new Date(acceptToken.expires_at).getTime() < Date.now()) {
-        return sendError(res, 403, '接单链接已过期。');
-      }
-
-      if (String(acceptToken.buyer_id) !== String(userId)) {
-        return sendError(res, 403, '你不是当前采购负责人，不能开始处理该询价项。');
-      }
-
-      const inquiry = await database('inquiry_items')
-        .select('id', 'buyer_owner_id', 'accepted_at', 'state')
-        .where({ id: acceptToken.inquiry_item_id })
-        .first();
-
-      if (!inquiry) {
-        return sendError(res, 404, '关联询价项不存在。');
-      }
-
-      if (String(inquiry.buyer_owner_id) !== String(userId)) {
-        return sendError(res, 403, '该询价项已重新分配，当前链接不能继续使用。');
-      }
-
-      if (!inquiry.accepted_at) {
-        const now = new Date();
-
-        await database.transaction(async (trx) => {
-          await trx('inquiry_items')
-            .where({ id: inquiry.id })
-            .update({ accepted_at: now, state: 'Purchasing' });
-
-          await trx('assignment_accept_tokens')
-            .where({ id: acceptToken.id })
-            .update({ used_at: now });
-        });
-      }
-
-      return redirectToInquiry(res, env, inquiry.id);
+      const result = await acceptInquiry(database, req);
+      return redirectToInquiry(res, env, result.inquiry_item_id);
     } catch (error) {
+      if (error instanceof AcceptError) {
+        return sendError(res, error.status, error.message);
+      }
+
+      return next(error);
+    }
+  });
+
+  router.get('/accept-json', async (req, res, next) => {
+    try {
+      const result = await acceptInquiry(database, req);
+      return res.json({ data: result });
+    } catch (error) {
+      if (error instanceof AcceptError) {
+        return sendError(res, error.status, error.message);
+      }
+
       return next(error);
     }
   });
 };
+
+async function acceptInquiry(database, req) {
+  const token = String(req.query.token ?? '');
+
+  if (!token) {
+    throw new AcceptError(400, '缺少接单 Token。');
+  }
+
+  const userId = req.accountability?.user;
+
+  if (!userId) {
+    throw new AcceptError(401, '请先登录后再开始处理询价项。');
+  }
+
+  const tokenHash = hashToken(token);
+  const acceptToken = await getAcceptToken(database, tokenHash);
+
+  if (!acceptToken) {
+    throw new AcceptError(403, '接单链接无效或已失效。');
+  }
+
+  if (!safeEqual(tokenHash, acceptToken.token_hash)) {
+    throw new AcceptError(403, '接单链接校验失败。');
+  }
+
+  if (acceptToken.used_at) {
+    return { inquiry_item_id: acceptToken.inquiry_item_id };
+  }
+
+  if (new Date(acceptToken.expires_at).getTime() < Date.now()) {
+    throw new AcceptError(403, '接单链接已过期。');
+  }
+
+  if (String(acceptToken.buyer_id) !== String(userId)) {
+    throw new AcceptError(403, '你不是当前采购负责人，不能开始处理该询价项。');
+  }
+
+  const inquiry = await database('inquiry_items')
+    .select('id', 'buyer_owner_id', 'accepted_at', 'state')
+    .where({ id: acceptToken.inquiry_item_id })
+    .first();
+
+  if (!inquiry) {
+    throw new AcceptError(404, '关联询价项不存在。');
+  }
+
+  if (String(inquiry.buyer_owner_id) !== String(userId)) {
+    throw new AcceptError(403, '该询价项已重新分配，当前链接不能继续使用。');
+  }
+
+  if (!inquiry.accepted_at) {
+    const now = new Date();
+
+    await database.transaction(async (trx) => {
+      await trx('inquiry_items')
+        .where({ id: inquiry.id })
+        .update({ accepted_at: now, state: 'Purchasing' });
+
+      await trx('assignment_accept_tokens')
+        .where({ id: acceptToken.id })
+        .update({ used_at: now });
+    });
+  }
+
+  return { inquiry_item_id: inquiry.id };
+}
 
 async function getAcceptToken(database, tokenHash) {
   return database('assignment_accept_tokens')
@@ -110,4 +132,11 @@ function sendError(res, status, message) {
       },
     ],
   });
+}
+
+class AcceptError extends Error {
+  constructor(status, message) {
+    super(message);
+    this.status = status;
+  }
 }

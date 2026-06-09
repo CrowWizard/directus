@@ -461,8 +461,8 @@ async function createAcceptTokenForInquiry(database, env, inquiryItemId, buyerId
     expires_at: expiresAt,
   });
 
-  const publicAppUrl = env.PUBLIC_APP_URL || 'http://localhost:8055';
-  return `${publicAppUrl}/purchase-flow-accept/accept?token=${token}`;
+  const purchaseAppUrl = env.PUBLIC_PURCHASE_APP_URL || env.PUBLIC_APP_URL || 'http://localhost:5173';
+  return `${purchaseAppUrl}/purchase-flow-accept/accept?token=${token}`;
 }
 
 async function notifyBuyer(database, env, logger, inquiry, buyerId, acceptUrl) {

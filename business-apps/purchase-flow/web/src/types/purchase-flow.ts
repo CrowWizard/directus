@@ -33,6 +33,7 @@ export type SupplierQuote = {
 	supplier_id?: Supplier | string | null;
 	quoted_by?: DirectusUser | string | null;
 	price?: number | string | null;
+	inquiry_price?: number | string | null;
 	currency?: string | null;
 	moq?: number | string | null;
 	lead_time?: string | null;
@@ -113,6 +114,19 @@ export type InquiryItemPayload = {
 
 export type CustomerPayload = Omit<Partial<Customer>, 'id'>;
 export type SupplierPayload = Omit<Partial<Supplier>, 'id'>;
+
+export type SupplierQuotePayload = {
+	inquiry_item_id: string;
+	supplier_id?: string | null;
+	price?: number | string | null;
+	inquiry_price?: number | string | null;
+	currency?: string | null;
+	moq?: number | string | null;
+	lead_time?: string | null;
+	quoted_by?: string | null;
+	quoted_at?: string | null;
+	remark?: string | null;
+};
 
 export type ConversationPayload = {
 	inquiry_item_id: string;

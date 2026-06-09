@@ -1,9 +1,10 @@
 import axios from 'axios';
 
 const ACCESS_TOKEN_KEY = 'purchase-flow.access-token';
+const DIRECTUS_URL = import.meta.env.VITE_DIRECTUS_URL || 'http://localhost:8055';
 
 export const http = axios.create({
-	baseURL: import.meta.env.VITE_DIRECTUS_URL || 'http://localhost:8055',
+	baseURL: DIRECTUS_URL,
 });
 
 http.interceptors.request.use((config) => {
@@ -16,4 +17,4 @@ http.interceptors.request.use((config) => {
 	return config;
 });
 
-export { ACCESS_TOKEN_KEY };
+export { ACCESS_TOKEN_KEY, DIRECTUS_URL };

@@ -27,8 +27,8 @@ export async function refresh() {
 	return response.data.data;
 }
 
-export async function logout() {
-	await http.post('/auth/logout');
+export async function logout(refreshToken: string) {
+	await http.post('/auth/logout', { refresh_token: refreshToken });
 }
 
 export async function getCurrentUser() {

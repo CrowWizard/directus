@@ -14,6 +14,7 @@ import type {
 	Supplier,
 	SupplierPayload,
 	SupplierQuote,
+	SupplierQuotePayload,
 } from '../types/purchase-flow';
 import { getLatestStep, type LatestStep } from '../utils/latest-step';
 import { http } from './http';
@@ -23,6 +24,10 @@ export type TaskWithDetail = InquiryItemDetail;
 export type TasksWithDetails = {
 	tasks: TaskWithDetail[];
 	latestSteps: Record<string, LatestStep>;
+};
+
+export type AcceptAssignmentResult = {
+	inquiry_item_id: string;
 };
 
 const summaryFields = ['*'];
@@ -67,6 +72,18 @@ function getTaskFilter(roleScope: RoleScope, userId: string) {
 	return { state: { _in: ['Assigned', 'Purchasing', 'WaitingSalesReview'] } };
 }
 
+function getInquiryItemsFilter(roleScope: RoleScope, userId: string) {
+	if (roleScope === 'Buyer') {
+		return { buyer_owner_id: { _eq: userId } };
+	}
+
+	if (roleScope === 'Sales') {
+		return { sales_owner_id: { _eq: userId } };
+	}
+
+	return undefined;
+}
+
 function buildInquiryItemFilter(询价项Id: string | string[]) {
 	return Array.isArray(询价项Id)
 		? { inquiry_item_id: { _in: 询价项Id } }
@@ -101,10 +118,11 @@ export async function getTasks(roleScope: RoleScope, userId: string, signal?: Ab
 	return unwrap(response);
 }
 
-export async function listInquiryItems(signal?: AbortSignal) {
+export async function listInquiryItems(roleScope: RoleScope, userId: string, signal?: AbortSignal) {
 	const response = await http.get<{ data: InquiryItemRow[] }>('/items/inquiry_items', {
 		params: {
 			fields: listFields,
+			filter: getInquiryItemsFilter(roleScope, userId),
 			sort: ['-updated_at'],
 			limit: TASKS_PAGE_LIMIT,
 		},
@@ -135,6 +153,22 @@ export async function getSupplierQuotes(询价项Id: string | string[], signal?:
 	});
 
 	return unwrap(response);
+}
+
+export async function createSupplierQuote(payload: SupplierQuotePayload, signal?: AbortSignal) {
+	const response = await http.post<{ data: SupplierQuote }>('/items/supplier_quotes', payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function updateSupplierQuote(id: string, payload: SupplierQuotePayload, signal?: AbortSignal) {
+	const response = await http.patch<{ data: SupplierQuote }>(`/items/supplier_quotes/${id}`, payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function deleteSupplierQuote(id: string, signal?: AbortSignal) {
+	await http.delete(`/items/supplier_quotes/${id}`, { signal });
 }
 
 export async function getCustomerQuotes(询价项Id: string | string[], signal?: AbortSignal) {
@@ -227,6 +261,12 @@ export async function listCustomers(signal?: AbortSignal) {
 	return unwrap(response);
 }
 
+export async function getCustomer(id: string, signal?: AbortSignal) {
+	const response = await http.get<{ data: Customer }>(`/items/customers/${id}`, { signal });
+
+	return unwrap(response);
+}
+
 export async function createCustomer(payload: CustomerPayload, signal?: AbortSignal) {
 	const response = await http.post<{ data: Customer }>('/items/customers', payload, { signal });
 
@@ -249,6 +289,12 @@ export async function listSuppliers(signal?: AbortSignal) {
 	return unwrap(response);
 }
 
+export async function getSupplier(id: string, signal?: AbortSignal) {
+	const response = await http.get<{ data: Supplier }>(`/items/suppliers/${id}`, { signal });
+
+	return unwrap(response);
+}
+
 export async function createSupplier(payload: SupplierPayload, signal?: AbortSignal) {
 	const response = await http.post<{ data: Supplier }>('/items/suppliers', payload, { signal });
 
@@ -267,6 +313,15 @@ export async function deleteSupplier(id: string, signal?: AbortSignal) {
 
 export async function createInquiryItem(payload: InquiryItemPayload, signal?: AbortSignal) {
 	const response = await http.post<{ data: InquiryItem }>('/items/inquiry_items', payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function acceptAssignment(token: string, signal?: AbortSignal) {
+	const response = await http.get<{ data: AcceptAssignmentResult }>('/purchase-flow-accept/accept-json', {
+		params: { token },
+		signal,
+	});
 
 	return unwrap(response);
 }

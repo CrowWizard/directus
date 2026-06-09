@@ -1,6 +1,17 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { http } from './http';
-import { commentAndUpdateState, createInquiryItem, getTasks, getTasksWithDetails, get询价项Summary, listInquiryItems } from './purchase-flow';
+import {
+	acceptAssignment,
+	commentAndUpdateState,
+	createInquiryItem,
+	createSupplierQuote,
+	deleteSupplierQuote,
+	getTasks,
+	getTasksWithDetails,
+	get询价项Summary,
+	listInquiryItems,
+	updateSupplierQuote,
+} from './purchase-flow';
 
 vi.mock('./http', () => ({
 	http: {
@@ -183,15 +194,16 @@ describe('purchase flow api', () => {
 		expect(result.latestSteps).toEqual({});
 	});
 
-	test('listInquiryItems fetches all items without role filter', async () => {
+	test('listInquiryItems filters sales items by owner', async () => {
 		mockHttp.get.mockResolvedValueOnce({ data: { data: [{ id: 'inq-1' }, { id: 'inq-2' }] } });
 
-		const result = await listInquiryItems();
+		const result = await listInquiryItems('Sales', 'user-1');
 
 		expect(mockHttp.get).toHaveBeenCalledWith(
 			'/items/inquiry_items',
 			expect.objectContaining({
 				params: expect.objectContaining({
+					filter: { sales_owner_id: { _eq: 'user-1' } },
 					sort: ['-updated_at'],
 					limit: 50,
 				}),
@@ -199,6 +211,15 @@ describe('purchase flow api', () => {
 		);
 
 		expect(result).toHaveLength(2);
+	});
+
+	test('listInquiryItems lets manager read all items', async () => {
+		mockHttp.get.mockResolvedValueOnce({ data: { data: [] } });
+
+		await listInquiryItems('Manager', 'manager-1');
+
+		const call = mockHttp.get.mock.calls[0][1] as { params: { filter?: unknown } };
+		expect(call.params.filter).toBeUndefined();
 	});
 
 	test('createInquiryItem posts to inquiry_items with given payload', async () => {
@@ -214,5 +235,61 @@ describe('purchase flow api', () => {
 		);
 
 		expect(result.product_name).toBe('Sensor');
+	});
+
+	test('createSupplierQuote posts to supplier_quotes with given payload', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { id: 'quote-1', price: 88 } } });
+
+		const payload = { inquiry_item_id: 'inq-1', price: '88', supplier_id: 'supplier-1' };
+		const result = await createSupplierQuote(payload);
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/items/supplier_quotes',
+			payload,
+			expect.objectContaining({ signal: undefined }),
+		);
+
+		expect(result.id).toBe('quote-1');
+	});
+
+	test('updateSupplierQuote patches supplier_quotes record', async () => {
+		mockHttp.patch.mockResolvedValueOnce({ data: { data: { id: 'quote-1', price: 128 } } });
+
+		const result = await updateSupplierQuote('quote-1', { inquiry_item_id: 'inq-1', price: 128 });
+
+		expect(mockHttp.patch).toHaveBeenCalledWith(
+			'/items/supplier_quotes/quote-1',
+			expect.objectContaining({ price: 128 }),
+			expect.objectContaining({ signal: undefined }),
+		);
+
+		expect(result.price).toBe(128);
+	});
+
+	test('deleteSupplierQuote deletes supplier_quotes record', async () => {
+		mockHttp.delete.mockResolvedValueOnce({});
+
+		await deleteSupplierQuote('quote-1');
+
+		expect(mockHttp.delete).toHaveBeenCalledWith(
+			'/items/supplier_quotes/quote-1',
+			expect.objectContaining({ signal: undefined }),
+		);
+	});
+
+	test('acceptAssignment calls accept-json endpoint with token', async () => {
+		mockHttp.get.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1' } } });
+
+		const result = await acceptAssignment('token-1');
+
+		expect(mockHttp.get).toHaveBeenCalledWith(
+			'/purchase-flow-accept/accept-json',
+			expect.objectContaining({
+				params: { token: 'token-1' },
+				signal: undefined,
+			}),
+		);
+
+		expect(result.inquiry_item_id).toBe('inq-1');
 	});
 });

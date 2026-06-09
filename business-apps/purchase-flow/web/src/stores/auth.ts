@@ -74,7 +74,7 @@ export const useAuthStore = defineStore('auth', {
 		},
 		async logout() {
 			try {
-				await logoutRequest();
+				if (this.refreshToken) await logoutRequest(this.refreshToken);
 			} finally {
 				this.clearSession();
 			}

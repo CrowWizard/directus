@@ -1,25 +1,14 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
-import { createCustomer, deleteCustomer, listCustomers, updateCustomer } from '../api/purchase-flow';
+import { RouterLink } from 'vue-router';
+import { deleteCustomer, listCustomers } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
-import EntityCrudTable from '../components/entity-crud-table.vue';
 import type { Customer } from '../types/purchase-flow';
-
-const fields = [
-	{ key: 'customer_code', label: '客户编码', autocomplete: 'off' },
-	{ key: 'customer_name', label: '客户名称', autocomplete: 'organization' },
-	{ key: 'country', label: '国家', autocomplete: 'country-name' },
-	{ key: 'address', label: '地址', autocomplete: 'street-address' },
-	{ key: 'website', label: '网站', type: 'url' as const, autocomplete: 'url' },
-	{ key: 'status', label: '状态', autocomplete: 'off' },
-	{ key: 'remark', label: '备注', autocomplete: 'off' },
-];
 
 const customers = ref<Customer[]>([]);
 const loading = ref(true);
 const submitting = ref(false);
 const error = ref('');
-const formVersion = ref(0);
 
 const requestController = new AbortController();
 
@@ -34,25 +23,6 @@ async function load(signal: AbortSignal) {
 		error.value = err instanceof Error ? err.message : '客户加载失败';
 	} finally {
 		loading.value = false;
-	}
-}
-
-async function save(payload: Record<string, unknown>, id: string | null) {
-	submitting.value = true;
-	error.value = '';
-
-	try {
-		const signal = requestController.signal;
-		if (id) await updateCustomer(id, payload, signal);
-		else await createCustomer(payload, signal);
-
-		formVersion.value += 1;
-		await load(signal);
-	} catch (err) {
-		if (err instanceof Error && err.name === 'CanceledError') return;
-		error.value = err instanceof Error ? err.message : '客户保存失败';
-	} finally {
-		submitting.value = false;
 	}
 }
 
@@ -87,17 +57,50 @@ onUnmounted(() => {
 				<p class="eyebrow">Customers</p>
 				<h2>客户管理</h2>
 			</div>
+			<RouterLink class="button-link" to="/customers/new">新增客户</RouterLink>
 		</section>
-		<EntityCrudTable
-			:error="error"
-			:fields="fields"
-			:items="customers"
-			:loading="loading"
-			:reset-key="formVersion"
-			:submitting="submitting"
-			title="客户"
-			@delete="remove"
-			@submit="save"
-		/>
+
+		<p v-if="loading" class="state-card" role="status" aria-live="polite" aria-busy="true">正在加载客户...</p>
+		<p v-else-if="error" class="state-card error" role="status" aria-live="polite">{{ error }}</p>
+		<p v-else-if="customers.length === 0" class="state-card" role="status" aria-live="polite">暂无客户</p>
+		<div v-else class="table-card table-card--wide">
+			<table>
+				<thead>
+					<tr>
+						<th scope="col">客户编码</th>
+						<th scope="col">客户名称</th>
+						<th scope="col">国家</th>
+						<th scope="col">地址</th>
+						<th scope="col">网站</th>
+						<th scope="col">状态</th>
+						<th scope="col">备注</th>
+						<th scope="col">操作</th>
+					</tr>
+				</thead>
+				<tbody>
+					<tr v-for="customer in customers" :key="customer.id">
+						<td>{{ customer.customer_code || '-' }}</td>
+						<td>{{ customer.customer_name || '-' }}</td>
+						<td>{{ customer.country || '-' }}</td>
+						<td>{{ customer.address || '-' }}</td>
+						<td>{{ customer.website || '-' }}</td>
+						<td>{{ customer.status || '-' }}</td>
+						<td>{{ customer.remark || '-' }}</td>
+						<td class="row-actions">
+							<RouterLink class="text-link" :to="`/customers/${customer.id}/edit`">编辑</RouterLink>
+							<button
+								type="button"
+								class="danger-button"
+								:data-test="`delete-${customer.id}`"
+								:disabled="submitting"
+								@click="remove(customer.id)"
+							>
+								删除
+							</button>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
 	</AppShell>
 </template>

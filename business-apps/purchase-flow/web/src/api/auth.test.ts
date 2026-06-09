@@ -30,4 +30,18 @@ describe('auth store', () => {
 		expect(auth.accessToken).toBe('token-1');
 		expect(auth.roleScope).toBe('Buyer');
 	});
+
+	test('sends refresh token when logging out', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { access_token: 'token-1', refresh_token: 'refresh-1' } } });
+		mockHttp.get.mockResolvedValueOnce({ data: { data: { id: 'user-1', role: { name: '采购员' } } } });
+		mockHttp.post.mockResolvedValueOnce({ data: {} });
+
+		const auth = useAuthStore();
+		await auth.login('buyer1@example.com', '12345678');
+		await auth.logout();
+
+		expect(mockHttp.post).toHaveBeenLastCalledWith('/auth/logout', { refresh_token: 'refresh-1' });
+		expect(auth.accessToken).toBe('');
+		expect(auth.refreshToken).toBe('');
+	});
 });
