@@ -15,7 +15,7 @@ function supplierName(supplier: SupplierQuote['supplier_id']) {
 	<section class="info-card">
 		<h3>供应商报价重点</h3>
 		<p v-if="quotes.length === 0" class="muted">暂无供应商报价。</p>
-		<table v-else>
+		<table v-else class="desktop-table">
 			<thead>
 				<tr>
 					<th scope="col">供应商</th>
@@ -35,5 +35,18 @@ function supplierName(supplier: SupplierQuote['supplier_id']) {
 				</tr>
 			</tbody>
 		</table>
+		<ul v-if="quotes.length" class="mobile-table-list" aria-label="供应商报价重点列表">
+			<li v-for="quote in quotes" :key="`mobile-${quote.id || `${quote.price}-${quote.quoted_at}`}`" class="mobile-table-item">
+				<div class="mobile-table-item__header">
+					<strong>{{ supplierName(quote.supplier_id) }}</strong>
+					<span>{{ quote.price || '-' }} {{ quote.currency || '' }}</span>
+				</div>
+				<dl class="mobile-table-meta">
+					<div><dt>MOQ</dt><dd>{{ quote.moq || '-' }}</dd></div>
+					<div><dt>交期</dt><dd>{{ quote.lead_time || '-' }}</dd></div>
+					<div><dt>报价时间</dt><dd>{{ quote.quoted_at || '-' }}</dd></div>
+				</dl>
+			</li>
+		</ul>
 	</section>
 </template>

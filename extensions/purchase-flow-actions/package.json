@@ -1,0 +1,15 @@
+{
+	"name": "purchase-flow-actions",
+	"version": "1.0.0",
+	"type": "module",
+	"directus:extension": {
+		"type": "endpoint",
+		"path": "dist/index.js",
+		"source": "src/index.js",
+		"sandbox": {
+			"enabled": false,
+			"requestedScopes": {}
+		},
+		"host": "^11.0.0"
+	}
+}

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
+import { PENDING_ACCEPT_TOKEN_KEY } from '../utils/accept-token';
 
 const auth = useAuthStore();
 const route = useRoute();
@@ -11,7 +12,11 @@ const password = ref('');
 
 async function submit() {
 	await auth.login(email.value, password.value);
-	await router.push(String(route.query.redirect || '/tasks'));
+
+	const pendingToken = window.sessionStorage.getItem(PENDING_ACCEPT_TOKEN_KEY);
+	const redirect = String(route.query.redirect || (pendingToken ? `/purchase-flow-accept/accept?token=${encodeURIComponent(pendingToken)}` : '/tasks'));
+
+	await router.push(redirect);
 }
 </script>
 

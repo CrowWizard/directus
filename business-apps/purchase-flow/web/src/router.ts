@@ -32,10 +32,14 @@ export const router = createRouter({
 	],
 });
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
 	const auth = useAuthStore();
 
 	if (!to.meta.public && !auth.isAuthenticated) {
+		return { path: '/login', query: { redirect: to.fullPath } };
+	}
+
+	if (!to.meta.public && !(await auth.ensureCurrentUser())) {
 		return { path: '/login', query: { redirect: to.fullPath } };
 	}
 

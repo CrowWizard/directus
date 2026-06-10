@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import TaskProgress from './task-progress.vue';
 import type { InquiryItem } from '../types/purchase-flow';
 
 defineProps<{ item: InquiryItem }>();
@@ -22,7 +23,7 @@ defineProps<{ item: InquiryItem }>();
 			</div>
 			<div>
 				<dt>状态</dt>
-				<dd>{{ item.state }}</dd>
+				<dd><TaskProgress :item="item" :state="item.state" /></dd>
 			</div>
 			<div>
 				<dt>优先级</dt>

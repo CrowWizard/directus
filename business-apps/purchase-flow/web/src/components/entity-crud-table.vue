@@ -26,6 +26,7 @@ const emit = defineEmits<{
 }>();
 
 const editingId = ref<string | null>(null);
+const pendingDeleteId = ref<string | null>(null);
 const form = reactive<Record<string, unknown>>({});
 let lastResetKey = props.resetKey ?? 0;
 
@@ -39,6 +40,7 @@ function reset() {
 
 function edit(item: Entity) {
 	editingId.value = item.id;
+	pendingDeleteId.value = null;
 
 	for (const field of props.fields) {
 		form[field.key] = item[field.key] || '';
@@ -48,6 +50,18 @@ function edit(item: Entity) {
 function submit() {
 	if (props.submitting) return;
 	emit('submit', { ...form }, editingId.value);
+}
+
+function requestDelete(id: string) {
+	if (props.submitting) return;
+
+	if (pendingDeleteId.value !== id) {
+		pendingDeleteId.value = id;
+		return;
+	}
+
+	emit('delete', id);
+	pendingDeleteId.value = null;
 }
 
 watch(
@@ -120,11 +134,21 @@ reset();
 								class="danger-button"
 								:data-test="`delete-${item.id}`"
 								:disabled="submitting"
-								@click="$emit('delete', item.id)"
+								:aria-label="pendingDeleteId === item.id ? `确认删除${title}` : `删除${title}`"
+								@click="requestDelete(item.id)"
 							>
-								删除
+								{{ pendingDeleteId === item.id ? '确认删除' : '删除' }}
 							</button>
-						</td>
+						<button
+							v-if="pendingDeleteId === item.id"
+							type="button"
+							class="ghost-button"
+							:disabled="submitting"
+							@click="pendingDeleteId = null"
+						>
+							取消
+						</button>
+					</td>
 					</tr>
 				</tbody>
 			</table>

@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router';
 import { createInquiryItem, listInquiryItems } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
 import InquiryItemForm from '../components/inquiry-item-form.vue';
+import TaskProgress from '../components/task-progress.vue';
 import { useAuthStore } from '../stores/auth';
 import type { InquiryItemRow } from '../types/purchase-flow';
 
@@ -124,7 +125,7 @@ onUnmounted(() => {
 						<td>{{ item.brand || '-' }} / {{ item.model || '-' }}</td>
 						<td class="cell-numeric">{{ item.quantity ?? '-' }} {{ item.unit || '' }}</td>
 						<td>{{ item.priority || '-' }}</td>
-						<td>{{ item.state }}</td>
+						<td class="inquiry-state-cell"><TaskProgress compact :item="item" :state="item.state" /></td>
 						<td>{{ customerName(item.customer_id) }}</td>
 						<td>{{ userName(item.sales_owner_id) }}</td>
 						<td>{{ userName(item.buyer_owner_id) }}</td>

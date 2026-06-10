@@ -1,12 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
-import { getTasksWithDetails } from '../api/purchase-flow';
+import { getTasksWithDetails, getUserTaskSummary } from '../api/purchase-flow';
 import { useAuthStore } from '../stores/auth';
 import TasksView from './tasks-view.vue';
 
 vi.mock('../api/purchase-flow', () => ({
 	getTasksWithDetails: vi.fn(),
+	getUserTaskSummary: vi.fn(),
 }));
 
 vi.mock('vue-router', async (importOriginal) => ({
@@ -15,6 +16,7 @@ vi.mock('vue-router', async (importOriginal) => ({
 }));
 
 const mockGetTasksWithDetails = vi.mocked(getTasksWithDetails);
+const mockGetUserTaskSummary = vi.mocked(getUserTaskSummary);
 
 describe('TasksView', () => {
 	beforeEach(() => {
@@ -44,6 +46,14 @@ describe('TasksView', () => {
 					supplier_quotes: [],
 				},
 			],
+		});
+		mockGetUserTaskSummary.mockResolvedValue({
+			id: 'summary-1',
+			active_task_count: 1,
+			active_task_details: [],
+			total_completed_task_count: 0,
+			weekly_completed_task_count: 0,
+			weekly_completed_task_details: [],
 		});
 
 		const wrapper = mount(TasksView, {

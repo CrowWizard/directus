@@ -38,7 +38,7 @@ export const useAuthStore = defineStore('auth', {
 			return names || state.currentUser?.email || '当前用户';
 		},
 	},
-	actions: {
+		actions: {
 		setTokens(accessToken: string, refreshToken = '') {
 			this.accessToken = accessToken;
 			this.refreshToken = refreshToken;
@@ -55,6 +55,21 @@ export const useAuthStore = defineStore('auth', {
 		},
 		async loadCurrentUser() {
 			this.currentUser = await getCurrentUser();
+		},
+		async ensureCurrentUser() {
+			if (!this.accessToken) return false;
+			if (this.currentUser?.id) return true;
+
+			try {
+				await this.loadCurrentUser();
+
+				return Boolean(this.currentUser?.id);
+			} catch (error) {
+				this.clearSession();
+				this.error = error instanceof Error ? error.message : '无法识别当前用户，请重新登录。';
+
+				return false;
+			}
 		},
 		async login(email: string, password: string) {
 			this.loading = true;

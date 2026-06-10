@@ -69,9 +69,8 @@ describe('purchase flow api', () => {
 		);
 	});
 
-	test('creates conversation before optional state update', async () => {
-		mockHttp.post.mockResolvedValueOnce({ data: { data: { id: 'conversation-1' } } });
-		mockHttp.patch.mockResolvedValueOnce({ data: { data: { id: 'inq-1' } } });
+	test('uses atomic endpoint when adding conversation with state transition', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1', state: 'WaitingSalesReview' } } });
 
 		await commentAndUpdateState({
 			actor_id: 'user-1',
@@ -81,14 +80,31 @@ describe('purchase flow api', () => {
 		});
 
 		expect(mockHttp.post).toHaveBeenCalledWith(
-			'/items/conversations',
-			expect.objectContaining({ content: '请补充目标价' }),
+			'/purchase-flow-actions/communicate-and-transition',
+			{
+				content: '请补充目标价',
+				inquiry_item_id: 'inq-1',
+				next_state: 'WaitingSalesReview',
+			},
 			expect.objectContaining({ signal: undefined }),
 		);
 
-		expect(mockHttp.patch).toHaveBeenCalledWith(
-			'/items/inquiry_items/inq-1',
-			{ state: 'WaitingSalesReview' },
+		expect(mockHttp.patch).not.toHaveBeenCalled();
+	});
+
+	test('creates conversation directly when no state transition is requested', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { id: 'conversation-1' } } });
+
+		await commentAndUpdateState({
+			actor_id: 'user-1',
+			content: '仅补充沟通记录',
+			inquiry_item_id: 'inq-1',
+			state: null,
+		});
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/items/conversations',
+			expect.objectContaining({ content: '仅补充沟通记录' }),
 			expect.objectContaining({ signal: undefined }),
 		);
 	});

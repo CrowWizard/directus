@@ -44,4 +44,17 @@ describe('auth store', () => {
 		expect(auth.accessToken).toBe('');
 		expect(auth.refreshToken).toBe('');
 	});
+
+	test('clears stale tokens when current user cannot be loaded', async () => {
+		window.localStorage.setItem('purchase-flow.access-token', 'stale-token');
+		mockHttp.get.mockRejectedValueOnce(new Error('Unauthorized'));
+
+		const auth = useAuthStore();
+		const validSession = await auth.ensureCurrentUser();
+
+		expect(validSession).toBe(false);
+		expect(auth.accessToken).toBe('');
+		expect(auth.currentUser).toBeNull();
+		expect(window.localStorage.getItem('purchase-flow.access-token')).toBeNull();
+	});
 });

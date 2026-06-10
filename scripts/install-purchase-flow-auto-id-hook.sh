@@ -8,7 +8,7 @@ EXTENSIONS_PATH="${EXTENSIONS_PATH:-${REPO_ROOT}/extensions}"
 SOURCE_DIR="${REPO_ROOT}/extensions/purchase-flow-auto-id"
 TARGET_DIR="${EXTENSIONS_PATH}/purchase-flow-auto-id"
 PUBLIC_APP_URL="${PUBLIC_APP_URL:-http://localhost:8055}"
-PUBLIC_PURCHASE_APP_URL="${PUBLIC_PURCHASE_APP_URL:-http://localhost:5173}"
+PUBLIC_PURCHASE_FLOW_WEB_URL="${PUBLIC_PURCHASE_FLOW_WEB_URL:-${PUBLIC_PURCHASE_APP_URL:-http://localhost:5173}}"
 ACCEPT_TOKEN_TTL_HOURS="${ACCEPT_TOKEN_TTL_HOURS:-24}"
 
 if [ ! -f "${SOURCE_DIR}/package.json" ] || [ ! -f "${SOURCE_DIR}/dist/index.js" ]; then
@@ -27,4 +27,4 @@ fi
 echo "已安装 Hook：${TARGET_DIR}"
 echo "来源目录：${SOURCE_DIR}"
 echo "重启 Directus 后生效。"
-echo "请确保 Directus 环境变量 PUBLIC_APP_URL=${PUBLIC_APP_URL}、PUBLIC_PURCHASE_APP_URL=${PUBLIC_PURCHASE_APP_URL} 和 ACCEPT_TOKEN_TTL_HOURS=${ACCEPT_TOKEN_TTL_HOURS} 可被服务进程读取。"
+echo "请确保 Directus 环境变量 PUBLIC_APP_URL=${PUBLIC_APP_URL}、PUBLIC_PURCHASE_FLOW_WEB_URL=${PUBLIC_PURCHASE_FLOW_WEB_URL} 和 ACCEPT_TOKEN_TTL_HOURS=${ACCEPT_TOKEN_TTL_HOURS} 可被服务进程读取。"

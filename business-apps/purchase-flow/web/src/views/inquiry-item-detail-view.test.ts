@@ -241,6 +241,11 @@ describe('InquiryItemDetailView', () => {
 
 		await wrapper.findAll('button').find((button) => button.text() === '删除')!.trigger('click');
 		await flushPromises();
+		expect(deleteSupplierQuote).not.toHaveBeenCalled();
+		expect(wrapper.text()).toContain('再次点击确认删除该供应商报价。');
+
+		await wrapper.findAll('button').find((button) => button.text() === '确认删除')!.trigger('click');
+		await flushPromises();
 
 		expect(deleteSupplierQuote).toHaveBeenCalledWith('quote-1', expect.anything());
 		expect(wrapper.text()).toContain('询价已删除。');
