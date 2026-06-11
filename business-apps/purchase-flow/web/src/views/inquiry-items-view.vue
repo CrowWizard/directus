@@ -19,10 +19,18 @@ const formVersion = ref(0);
 
 const filters = reactive({
 	state: '',
+	priority: '',
 	keyword: '',
 	customer: '',
 	updatedBefore: '',
 });
+
+const priorities = [
+	{ label: '低', value: 'Low' },
+	{ label: '普通', value: 'Normal' },
+	{ label: '高', value: 'High' },
+	{ label: '紧急', value: 'Urgent' },
+];
 
 const requestController = new AbortController();
 
@@ -49,12 +57,13 @@ const filteredItems = computed(() => {
 	return items.value.filter((item) => {
 		const itemCustomerName = customerName(item.customer_id);
 		const matchesState = !filters.state || item.state === filters.state;
+		const matchesPriority = !filters.priority || item.priority === filters.priority;
 		const matchesKeyword = !keyword || [item.inquiry_no, item.product_name, item.brand, item.model, item.project_name]
 			.some((value) => normalize(value).includes(keyword));
 		const matchesCustomer = !customer || normalize(itemCustomerName).includes(customer);
 		const matchesUpdatedBefore = !filters.updatedBefore || String(item.updated_at || '').slice(0, 10) <= filters.updatedBefore;
 
-		return matchesState && matchesKeyword && matchesCustomer && matchesUpdatedBefore;
+		return matchesState && matchesPriority && matchesKeyword && matchesCustomer && matchesUpdatedBefore;
 	});
 });
 
@@ -128,6 +137,7 @@ onUnmounted(() => {
 		<section class="filter-panel" aria-label="询价项查询">
 			<div class="filter-panel__grid">
 			<label>状态<select v-model="filters.state"><option value="">全部状态</option><option value="Draft">{{ getStateLabel('Draft') }}</option><option value="Assigned">{{ getStateLabel('Assigned') }}</option><option value="Purchasing">{{ getStateLabel('Purchasing') }}</option><option value="WaitingSalesReview">{{ getStateLabel('WaitingSalesReview') }}</option><option value="Quoted">{{ getStateLabel('Quoted') }}</option><option value="Closed">{{ getStateLabel('Closed') }}</option></select></label>
+			<label>优先级<select v-model="filters.priority"><option value="">全部优先级</option><option v-for="priority in priorities" :key="priority.value" :value="priority.value">{{ priority.label }}</option></select></label>
 			<label>名称/编号<input v-model="filters.keyword" type="search" placeholder="产品、询价号、品牌、型号" /></label>
 			<label>客户<input v-model="filters.customer" type="search" placeholder="客户名称" /></label>
 			<label>更新时间早于<input v-model="filters.updatedBefore" type="date" /></label>

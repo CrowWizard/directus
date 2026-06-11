@@ -134,6 +134,16 @@ permission_exists() {
   [ "$(jq '.data | length' <<<"${response}")" -gt 0 ]
 }
 
+get_permission_id() {
+  local policy_id="$1"
+  local collection="$2"
+  local action="$3"
+  local response
+  response=$(api_get /permissions "$(jq -cn --arg policy "${policy_id}" --arg collection "${collection}" --arg action "${action}" '{policy:{_eq:$policy},collection:{_eq:$collection},action:{_eq:$action}}')")
+  ensure_no_errors "${response}" "查询权限 ${collection}.${action}"
+  jq -r '.data[0].id // empty' <<<"${response}"
+}
+
 create_permission() {
   local policy_id="$1"
   local collection="$2"
@@ -173,6 +183,41 @@ create_permission() {
   echo "已创建权限：${collection}.${action}"
 }
 
+upsert_permission() {
+  local policy_id="$1"
+  local collection="$2"
+  local action="$3"
+  local permissions="{}"
+  local validation="${5:-null}"
+  local fields="${6:-[\"*\"]}"
+  local permission_id
+
+  if [ "$#" -ge 4 ]; then
+    permissions="$4"
+  fi
+
+  permission_id=$(get_permission_id "${policy_id}" "${collection}" "${action}")
+
+  local body
+  body=$(jq -cn \
+    --arg policy "${policy_id}" \
+    --arg collection "${collection}" \
+    --arg action "${action}" \
+    --arg permissions "${permissions}" \
+    --arg validation "${validation}" \
+    --arg fields "${fields}" \
+    '{policy:$policy,collection:$collection,action:$action,permissions:($permissions|fromjson),validation:($validation|fromjson),fields:($fields|fromjson)}')
+
+  if [ -n "${permission_id}" ]; then
+    ensure_no_errors "$(api PATCH "/permissions/${permission_id}" "${body}")" "更新权限 ${collection}.${action}"
+    echo "已更新权限：${collection}.${action}"
+    return 0
+  fi
+
+  ensure_no_errors "$(api POST /permissions "${body}")" "创建权限 ${collection}.${action}"
+  echo "已创建权限：${collection}.${action}"
+}
+
 grant_all_actions() {
   local policy_id="$1"
   local collection="$2"
@@ -204,21 +249,37 @@ ensure_access "${SALES_ROLE_ID}" "${SALES_POLICY_ID}"
 ensure_access "${BUYER_ROLE_ID}" "${BUYER_POLICY_ID}"
 ensure_access "${MANAGER_ROLE_ID}" "${MANAGER_POLICY_ID}"
 
-for collection in customers customer_contacts inquiry_items customer_quotes conversations attachments supplier_quotes suppliers priority_rules assignment_accept_tokens user_task_summaries; do
+for collection in inquiry_items customer_quotes conversations attachments supplier_quotes priority_rules assignment_accept_tokens user_task_summaries; do
   grant_all_actions "${SALES_POLICY_ID}" "${collection}"
 done
 
-for collection in suppliers supplier_contacts inquiry_items supplier_quotes conversations attachments buyer_profiles assignment_rules priority_rules customers assignment_accept_tokens user_task_summaries; do
+for collection in inquiry_items supplier_quotes conversations attachments buyer_profiles assignment_rules priority_rules assignment_accept_tokens user_task_summaries; do
   grant_all_actions "${BUYER_POLICY_ID}" "${collection}"
 done
 
-for collection in customers customer_contacts suppliers supplier_contacts inquiry_items supplier_quotes customer_quotes conversations attachments buyer_profiles priority_rules assignment_rules assignment_accept_tokens manager_approvals user_task_summaries; do
+for collection in customers customer_contacts suppliers supplier_contacts inquiry_items supplier_quotes customer_quotes conversations attachments buyer_profiles priority_rules assignment_rules assignment_accept_tokens manager_approvals user_task_summaries purchase_tags; do
   grant_all_actions "${MANAGER_POLICY_ID}" "${collection}"
+done
+
+for collection in customers customer_contacts suppliers supplier_contacts purchase_tags; do
+  grant_read_only "${SALES_POLICY_ID}" "${collection}"
+  grant_read_only "${BUYER_POLICY_ID}" "${collection}"
 done
 
 grant_read_only "${SALES_POLICY_ID}" directus_users
 grant_read_only "${BUYER_POLICY_ID}" directus_users
-grant_read_only "${MANAGER_POLICY_ID}" directus_users
+grant_all_actions "${MANAGER_POLICY_ID}" directus_users
+grant_read_only "${MANAGER_POLICY_ID}" directus_roles
+
+upsert_permission "${SALES_POLICY_ID}" directus_files create '{}' '{}' '["*"]'
+upsert_permission "${SALES_POLICY_ID}" directus_files read '{}' null '["*"]'
+upsert_permission "${BUYER_POLICY_ID}" directus_files create '{}' '{}' '["*"]'
+upsert_permission "${BUYER_POLICY_ID}" directus_files read '{}' null '["*"]'
+upsert_permission "${MANAGER_POLICY_ID}" directus_files create '{}' '{}' '["*"]'
+upsert_permission "${MANAGER_POLICY_ID}" directus_files read '{}' null '["*"]'
+
+grant_read_only "${SALES_POLICY_ID}" manager_approvals
+grant_read_only "${BUYER_POLICY_ID}" manager_approvals
 
 echo "权限配置完成。"
 echo "外贸员角色：${SALES_ROLE_ID}"

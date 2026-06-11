@@ -5,7 +5,7 @@ export type DirectusUser = {
 	email?: string;
 	first_name?: string | null;
 	last_name?: string | null;
-	role?: { name?: string | null } | string | null;
+	role?: { id?: string; name?: string | null } | string | null;
 };
 
 export type LoginResult = {

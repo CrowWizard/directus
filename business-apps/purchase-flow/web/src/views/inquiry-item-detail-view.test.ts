@@ -175,6 +175,32 @@ describe('InquiryItemDetailView', () => {
 		expect(wrapper.text()).not.toContain('审批状态展示');
 	});
 
+	test('shows inquiry attachments in basic information with download links', async () => {
+		vi.mocked(get询价项Detail).mockResolvedValue({
+			id: 'inq-1',
+			attachment_ids: [{ id: 'file-1', filename_download: '询价附件.pdf' }],
+			conversations: [],
+			customer_quotes: [],
+			inquiry_no: 'INQ-001',
+			state: 'Purchasing',
+			supplier_quotes: [],
+		});
+
+		const wrapper = mount(询价项DetailView, {
+			global: { plugins: [pinia], stubs: { RouterLink: { props: ['to'], template: '<a><slot /></a>' } } },
+		});
+
+		await flushPromises();
+
+		const attachmentLink = wrapper.find('a[download]');
+
+		expect(wrapper.text()).toContain('基础信息区');
+		expect(wrapper.text()).toContain('附件');
+		expect(wrapper.text()).toContain('询价附件.pdf');
+		expect(attachmentLink.attributes('href')).toMatch(/\/assets\/file-1\?download$/);
+		expect(wrapper.text()).not.toContain('附件区');
+	});
+
 	test('lets sales owner edit inquiry before final quote is completed', async () => {
 		const auth = useAuthStore();
 		auth.currentUser = { id: 'sales-1', role: { name: '外贸员' } };

@@ -16,6 +16,7 @@ const targetCollections = new Set([
   'assignment_accept_tokens',
   'manager_approvals',
   'user_task_summaries',
+  'purchase_tags',
 ]);
 
 const finishedStates = new Set(['Quoted', 'Closed']);

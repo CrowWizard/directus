@@ -32,6 +32,9 @@ export const useAuthStore = defineStore('auth', {
 	getters: {
 		isAuthenticated: (state) => Boolean(state.accessToken),
 		roleScope: (state): RoleScope => mapRoleScope(getRoleName(state.currentUser)),
+		isManager(): boolean {
+			return this.roleScope === 'Manager';
+		},
 		userName: (state) => {
 			const names = [state.currentUser?.first_name, state.currentUser?.last_name].filter(Boolean).join(' ');
 

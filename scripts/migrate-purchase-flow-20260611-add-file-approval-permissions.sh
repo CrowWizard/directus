@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# 幂等补齐采购询价流程相关权限。
-# 适用于已执行过 init-purchase-flow-permissions.sh 的环境，可重复执行以填充缺失的权限行。
+# 2026-06-11 补齐询价附件上传和经理审批记录读取权限。
 
 set -euo pipefail
 
@@ -36,13 +35,13 @@ api() {
 	local body="${3:-}"
 
 	if [ -z "${body}" ]; then
-		curl -sSL -X "${method}" "${BASE_URL}${path}" \
+		curl -sS -X "${method}" "${BASE_URL}${path}" \
 			-H "Authorization: Bearer ${TOKEN}" \
 			-H "Content-Type: application/json"
 		return 0
 	fi
 
-	curl -sSL -X "${method}" "${BASE_URL}${path}" \
+	curl -sS -X "${method}" "${BASE_URL}${path}" \
 		-H "Authorization: Bearer ${TOKEN}" \
 		-H "Content-Type: application/json" \
 		-d "${body}"
@@ -52,7 +51,7 @@ api_get() {
 	local path="$1"
 	local filter="$2"
 
-	curl -sSL -G "${BASE_URL}${path}" \
+	curl -sS -G "${BASE_URL}${path}" \
 		-H "Authorization: Bearer ${TOKEN}" \
 		-H "Content-Type: application/json" \
 		--data-urlencode "filter=${filter}"
@@ -182,16 +181,6 @@ upsert_permission() {
 	echo "已创建权限：${collection}.${action}"
 }
 
-grant_all_actions() {
-	local policy_id="$1"
-	local collection="$2"
-
-	create_permission "${policy_id}" "${collection}" create '{}' '{}'
-	create_permission "${policy_id}" "${collection}" read '{}' null
-	create_permission "${policy_id}" "${collection}" update '{}' '{}'
-	create_permission "${policy_id}" "${collection}" delete '{}' null
-}
-
 grant_read_only() {
 	local policy_id="$1"
 	local collection="$2"
@@ -199,39 +188,25 @@ grant_read_only() {
 	create_permission "${policy_id}" "${collection}" read '{}' null
 }
 
-echo "开始补齐采购询价流程权限..."
+grant_file_access() {
+	local policy_id="$1"
+
+	upsert_permission "${policy_id}" directus_files create '{}' '{}' '["*"]'
+	upsert_permission "${policy_id}" directus_files read '{}' null '["*"]'
+}
+
+echo "开始补齐附件与审批记录权限..."
 
 SALES_POLICY_ID=$(ensure_policy "外贸询价采购 - 外贸员")
 BUYER_POLICY_ID=$(ensure_policy "外贸询价采购 - 采购员")
 MANAGER_POLICY_ID=$(ensure_policy "外贸询价采购 - 经理")
 
-for collection in customers customer_contacts inquiry_items customer_quotes conversations attachments supplier_quotes suppliers priority_rules assignment_accept_tokens user_task_summaries; do
-	grant_all_actions "${SALES_POLICY_ID}" "${collection}"
-done
-
-for collection in suppliers supplier_contacts inquiry_items supplier_quotes customer_quotes conversations attachments buyer_profiles assignment_rules priority_rules customers customer_contacts assignment_accept_tokens user_task_summaries; do
-	grant_all_actions "${BUYER_POLICY_ID}" "${collection}"
-done
-
-for collection in customers customer_contacts suppliers supplier_contacts inquiry_items supplier_quotes customer_quotes conversations attachments buyer_profiles priority_rules assignment_rules assignment_accept_tokens manager_approvals user_task_summaries; do
-	grant_all_actions "${MANAGER_POLICY_ID}" "${collection}"
-done
-
-grant_read_only "${SALES_POLICY_ID}" directus_users
-grant_read_only "${BUYER_POLICY_ID}" directus_users
-grant_read_only "${MANAGER_POLICY_ID}" directus_users
-
-upsert_permission "${SALES_POLICY_ID}" directus_files create '{}' '{}' '["*"]'
-upsert_permission "${SALES_POLICY_ID}" directus_files read '{}' null '["*"]'
-upsert_permission "${BUYER_POLICY_ID}" directus_files create '{}' '{}' '["*"]'
-upsert_permission "${BUYER_POLICY_ID}" directus_files read '{}' null '["*"]'
-upsert_permission "${MANAGER_POLICY_ID}" directus_files create '{}' '{}' '["*"]'
-upsert_permission "${MANAGER_POLICY_ID}" directus_files read '{}' null '["*"]'
+grant_file_access "${SALES_POLICY_ID}"
+grant_file_access "${BUYER_POLICY_ID}"
+grant_file_access "${MANAGER_POLICY_ID}"
 
 grant_read_only "${SALES_POLICY_ID}" manager_approvals
 grant_read_only "${BUYER_POLICY_ID}" manager_approvals
+grant_read_only "${MANAGER_POLICY_ID}" manager_approvals
 
-echo "权限补齐完成。"
-echo "外贸员 policy：${SALES_POLICY_ID}"
-echo "采购员 policy：${BUYER_POLICY_ID}"
-echo "经理 policy：${MANAGER_POLICY_ID}"
+echo "附件与审批记录权限补齐完成。"

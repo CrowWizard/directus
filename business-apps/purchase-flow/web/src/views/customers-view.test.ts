@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { createCustomer, deleteCustomer, getCustomer, listCustomers, updateCustomer } from '../api/purchase-flow';
+import { useAuthStore } from '../stores/auth';
 import CustomerCreateView from './customer-create-view.vue';
 import CustomerEditView from './customer-edit-view.vue';
 import CustomersView from './customers-view.vue';
@@ -24,18 +25,23 @@ vi.mock('vue-router', async (importOriginal) => ({
 }));
 
 describe('CustomersView', () => {
+	let pinia: ReturnType<typeof createPinia>;
+
 	beforeEach(() => {
-		setActivePinia(createPinia());
+		pinia = createPinia();
+		setActivePinia(pinia);
+		const auth = useAuthStore();
+		auth.currentUser = { id: 'manager-1', role: { name: '经理' } };
 		routeParams = {};
 		vi.clearAllMocks();
 	});
 
-	const global = { plugins: [createPinia()], stubs: { RouterLink: { template: '<a><slot /></a>' } } };
+	const getGlobal = () => ({ plugins: [pinia], stubs: { RouterLink: { template: '<a><slot /></a>' } } });
 
 	test('renders customer list without inline form', async () => {
 		vi.mocked(listCustomers).mockResolvedValue([{ id: 'customer-1', customer_name: 'ACME' }]);
 
-		const wrapper = mount(CustomersView, { global });
+		const wrapper = mount(CustomersView, { global: getGlobal() });
 		await flushPromises();
 
 		expect(wrapper.text()).toContain('ACME');
@@ -45,7 +51,7 @@ describe('CustomersView', () => {
 	test('deletes a customer from the list', async () => {
 		vi.mocked(listCustomers).mockResolvedValue([{ id: 'customer-1', customer_name: 'ACME' }]);
 
-		const wrapper = mount(CustomersView, { global });
+		const wrapper = mount(CustomersView, { global: getGlobal() });
 		await flushPromises();
 		await wrapper.find('[data-test="delete-customer-1"]').trigger('click');
 		await flushPromises();
@@ -53,10 +59,23 @@ describe('CustomersView', () => {
 		expect(deleteCustomer).toHaveBeenCalledWith('customer-1', expect.anything());
 	});
 
+	test('hides customer write actions for non-manager roles', async () => {
+		const auth = useAuthStore();
+		auth.currentUser = { id: 'sales-1', role: { name: '外贸员' } };
+		vi.mocked(listCustomers).mockResolvedValue([{ id: 'customer-1', customer_name: 'ACME' }]);
+
+		const wrapper = mount(CustomersView, { global: getGlobal() });
+		await flushPromises();
+
+		expect(wrapper.text()).not.toContain('新增客户');
+		expect(wrapper.text()).not.toContain('编辑');
+		expect(wrapper.find('[data-test="delete-customer-1"]').exists()).toBe(false);
+	});
+
 	test('creates a customer on a standalone page', async () => {
 		vi.mocked(createCustomer).mockResolvedValue({ id: 'customer-1', customer_name: 'ACME' });
 
-		const wrapper = mount(CustomerCreateView, { global });
+		const wrapper = mount(CustomerCreateView, { global: getGlobal() });
 		await wrapper.find('[name="customer_name"]').setValue('ACME');
 		await wrapper.find('form').trigger('submit');
 		await flushPromises();
@@ -70,7 +89,7 @@ describe('CustomersView', () => {
 		vi.mocked(getCustomer).mockResolvedValue({ id: 'customer-1', customer_name: 'ACME' });
 		vi.mocked(updateCustomer).mockResolvedValue({ id: 'customer-1', customer_name: 'ACME CN' });
 
-		const wrapper = mount(CustomerEditView, { global });
+		const wrapper = mount(CustomerEditView, { global: getGlobal() });
 		await flushPromises();
 		await wrapper.find('[name="customer_name"]').setValue('ACME CN');
 		await wrapper.find('form').trigger('submit');

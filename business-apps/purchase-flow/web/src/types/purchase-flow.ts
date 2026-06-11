@@ -25,6 +25,58 @@ export type CustomerContact = {
 	remark?: string | null;
 };
 
+export type DirectusRole = {
+	id: string;
+	name?: string | null;
+};
+
+export type Employee = DirectusUser & {
+	status?: string | null;
+	wechat_work_userid?: string | null;
+};
+
+export type EmployeePayload = {
+	email?: string;
+	password?: string;
+	first_name?: string | null;
+	last_name?: string | null;
+	role?: string | null;
+	status?: string | null;
+	wechat_work_userid?: string | null;
+};
+
+export type BuyerProfile = {
+	id?: string;
+	buyer_id?: DirectusUser | string | null;
+	tags?: string | null;
+	brands?: string | null;
+	score?: number | string | null;
+	active_task_count?: number | null;
+	completed_task_count?: number | null;
+	is_available?: boolean | null;
+};
+
+export type BuyerProfilePayload = {
+	buyer_id?: string;
+	tags?: string | null;
+	brands?: string | null;
+	score?: number | string | null;
+	is_available?: boolean | null;
+};
+
+export type PurchaseTag = {
+	id: string;
+	tag_name?: string | null;
+	enabled?: boolean | null;
+	created_at?: string | null;
+	updated_at?: string | null;
+};
+
+export type PurchaseTagPayload = {
+	tag_name?: string;
+	enabled?: boolean | null;
+};
+
 export type Supplier = {
 	id: string;
 	supplier_code?: string;
@@ -111,6 +163,7 @@ export type InquiryItem = {
 	quantity?: number | null;
 	unit?: string;
 	target_price?: number | string | null;
+	expected_quote_at?: string | null;
 	priority?: string;
 	state: InquiryState;
 	remark?: string | null;
@@ -184,11 +237,13 @@ export type InquiryItemPayload = {
 	quantity?: number | null;
 	unit?: string;
 	target_price?: number | string | null;
+	expected_quote_at?: string | null;
 	priority?: string;
 	sales_owner_id?: string;
 	buyer_owner_id?: string | null;
 	remark?: string;
 	tags?: string;
+	attachment_ids?: unknown;
 };
 
 export type CustomerPayload = Omit<Partial<Customer>, 'id'>;

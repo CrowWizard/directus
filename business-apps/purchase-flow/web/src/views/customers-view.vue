@@ -3,9 +3,11 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { deleteCustomer, listCustomerContacts, listCustomerInquiryHistory, listCustomers, updateCustomerStatus } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
+import { useAuthStore } from '../stores/auth';
 import type { Customer, CustomerContact, InquiryItemRow } from '../types/purchase-flow';
 import { getStateLabel } from '../utils/inquiry-state';
 
+const auth = useAuthStore();
 const customers = ref<Customer[]>([]);
 const loading = ref(true);
 const submitting = ref(false);
@@ -48,6 +50,8 @@ async function loadCustomerContacts(signal: AbortSignal) {
 }
 
 async function remove(id: string) {
+	if (!auth.isManager) return;
+
 	submitting.value = true;
 	error.value = '';
 
@@ -63,7 +67,7 @@ async function remove(id: string) {
 }
 
 async function toggleStatus(customer: Customer) {
-	if (submitting.value) return;
+	if (!auth.isManager || submitting.value) return;
 
 	submitting.value = true;
 	error.value = '';
@@ -141,7 +145,7 @@ onUnmounted(() => {
 				<p class="eyebrow">Customers</p>
 				<h2>客户管理</h2>
 			</div>
-			<RouterLink class="button-link" to="/customers/new">新增客户</RouterLink>
+			<RouterLink v-if="auth.isManager" class="button-link" to="/customers/new">新增客户</RouterLink>
 		</section>
 
 		<p v-if="loading" class="state-card" role="status" aria-live="polite" aria-busy="true">正在加载客户...</p>
@@ -181,11 +185,12 @@ onUnmounted(() => {
 							<button type="button" class="ghost-button" :disabled="submitting" @click="toggleDetails(customer)">
 								{{ expandedCustomerId === customer.id ? '收起' : '详情' }}
 							</button>
-							<button type="button" class="ghost-button" :disabled="submitting" @click="toggleStatus(customer)">
+							<button v-if="auth.isManager" type="button" class="ghost-button" :disabled="submitting" @click="toggleStatus(customer)">
 								{{ isActive(customer.status) ? '停用' : '启用' }}
 							</button>
-							<RouterLink class="text-link" :to="`/customers/${customer.id}/edit`">编辑</RouterLink>
+							<RouterLink v-if="auth.isManager" class="text-link" :to="`/customers/${customer.id}/edit`">编辑</RouterLink>
 							<button
+								v-if="auth.isManager"
 								type="button"
 								class="danger-button"
 								:data-test="`delete-${customer.id}`"

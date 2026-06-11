@@ -137,6 +137,7 @@ create_collection assignment_rules rule 自动分配规则 "{{tag}} / {{brand}}"
 create_collection assignment_accept_tokens key 采购接单令牌 "{{inquiry_item_id.inquiry_no}}"
 create_collection manager_approvals approval 经理审批 "{{inquiry_item_id.inquiry_no}} - {{status}}"
 create_collection user_task_summaries checklist 用户任务统计 "{{user_id.email}}"
+create_collection purchase_tags sell 采购Tag "{{tag_name}}"
 
 create_field directus_users wechat_work_userid string input "企业微信 userid，用于向指定成员发送提醒。" false half
 
@@ -279,5 +280,10 @@ create_field user_task_summaries weekly_completed_task_count integer input 本�
 create_field user_task_summaries active_task_details json input-code 进行中任务详情 false full "[\"cast-json\"]"
 create_field user_task_summaries weekly_completed_task_details json input-code 本周完成任务详情 false full "[\"cast-json\"]"
 create_field user_task_summaries refreshed_at timestamp datetime 刷新时间 false half
+
+create_field purchase_tags tag_name string input Tag名称 true half
+create_field purchase_tags enabled boolean boolean 启用 false half
+create_field purchase_tags created_at timestamp datetime 创建时间 false half "[\"date-created\"]"
+create_field purchase_tags updated_at timestamp datetime 更新时间 false half "[\"date-updated\"]"
 
 echo "数据模型创建完成。"

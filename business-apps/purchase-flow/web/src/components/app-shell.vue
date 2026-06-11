@@ -35,6 +35,9 @@ async function signOut() {
 				<RouterLink to="/customers">客户管理</RouterLink>
 				<RouterLink to="/suppliers">供应商管理</RouterLink>
 				<RouterLink to="/inquiry-items">询价项</RouterLink>
+				<RouterLink v-if="auth.isManager" to="/employees">员工管理</RouterLink>
+				<RouterLink v-if="auth.isManager" to="/buyer-profiles">采购员画像</RouterLink>
+				<RouterLink v-if="auth.isManager" to="/tags">Tag 管理</RouterLink>
 			</nav>
 		</aside>
 		<main id="main" class="content-panel" tabindex="-1">

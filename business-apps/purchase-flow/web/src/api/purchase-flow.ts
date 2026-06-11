@@ -8,11 +8,18 @@ import type {
 	CustomerPayload,
 	CustomerQuote,
 	CustomerQuotePayload,
+	BuyerProfile,
+	BuyerProfilePayload,
+	DirectusRole,
+	Employee,
+	EmployeePayload,
 	InquiryItem,
 	InquiryItemDetail,
 	InquiryItemPayload,
 	InquiryItemRow,
 	InquiryState,
+	PurchaseTag,
+	PurchaseTagPayload,
 	RoleScope,
 	Supplier,
 	SupplierContact,
@@ -67,6 +74,11 @@ export type CloseInquiryResult = {
 	state: InquiryState;
 };
 
+export type UploadedFile = {
+	id: string;
+	filename_download?: string | null;
+};
+
 export type ApproveCustomerQuoteDecision = 'Approved' | 'Rejected';
 
 export type ApproveCustomerQuoteResult = {
@@ -108,6 +120,7 @@ const listFields = [
 	'quantity',
 	'unit',
 	'target_price',
+	'expected_quote_at',
 	'priority',
 	'state',
 	'remark',
@@ -487,6 +500,118 @@ export async function listSuppliers(signal?: AbortSignal) {
 	return unwrap(response);
 }
 
+export async function listRoles(signal?: AbortSignal) {
+	const response = await http.get<{ data: DirectusRole[] }>('/roles', {
+		params: {
+			fields: ['id', 'name'],
+			filter: { name: { _in: ['外贸员', '采购员', '经理'] } },
+			sort: ['name'],
+			limit: -1,
+		},
+		signal,
+	});
+
+	return unwrap(response);
+}
+
+export async function listEmployees(signal?: AbortSignal) {
+	const response = await http.get<{ data: Employee[] }>('/users', {
+		params: {
+			fields: ['id', 'email', 'first_name', 'last_name', 'role.id', 'role.name', 'status', 'wechat_work_userid'],
+			sort: ['first_name', 'email'],
+			limit: -1,
+		},
+		signal,
+	});
+
+	return unwrap(response);
+}
+
+export async function getEmployee(id: string, signal?: AbortSignal) {
+	const response = await http.get<{ data: Employee }>(`/users/${id}`, {
+		params: { fields: ['id', 'email', 'first_name', 'last_name', 'role.id', 'role.name', 'status', 'wechat_work_userid'] },
+		signal,
+	});
+
+	return unwrap(response);
+}
+
+export async function createEmployee(payload: EmployeePayload, signal?: AbortSignal) {
+	const response = await http.post<{ data: Employee }>('/users', payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function updateEmployee(id: string, payload: EmployeePayload, signal?: AbortSignal) {
+	const response = await http.patch<{ data: Employee }>(`/users/${id}`, payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function updateEmployeeStatus(id: string, status: string, signal?: AbortSignal) {
+	const response = await http.patch<{ data: Employee }>(`/users/${id}`, { status }, { signal });
+
+	return unwrap(response);
+}
+
+export async function listBuyerProfiles(signal?: AbortSignal) {
+	const response = await http.get<{ data: BuyerProfile[] }>('/items/buyer_profiles', {
+		params: {
+			fields: ['*', 'buyer_id.id', 'buyer_id.email', 'buyer_id.first_name', 'buyer_id.last_name'],
+			sort: ['buyer_id.first_name'],
+			limit: -1,
+		},
+		signal,
+	});
+
+	return unwrap(response);
+}
+
+export async function upsertBuyerProfile(buyerId: string, payload: BuyerProfilePayload, signal?: AbortSignal) {
+	const existingResponse = await http.get<{ data: BuyerProfile[] }>('/items/buyer_profiles', {
+		params: { fields: ['id'], filter: { buyer_id: { _eq: buyerId } }, limit: 1 },
+		signal,
+	});
+
+	const existing = unwrap(existingResponse)[0];
+	const profilePayload = { ...payload, buyer_id: buyerId };
+
+	if (existing?.id) {
+		const response = await http.patch<{ data: BuyerProfile }>(`/items/buyer_profiles/${existing.id}`, profilePayload, { signal });
+
+		return unwrap(response);
+	}
+
+	const response = await http.post<{ data: BuyerProfile }>('/items/buyer_profiles', profilePayload, { signal });
+
+	return unwrap(response);
+}
+
+export async function listPurchaseTags(signal?: AbortSignal) {
+	const response = await http.get<{ data: PurchaseTag[] }>('/items/purchase_tags', {
+		params: { fields: ['*'], sort: ['tag_name'], limit: -1 },
+		signal,
+	});
+
+	return unwrap(response);
+}
+
+export async function createPurchaseTag(payload: PurchaseTagPayload, signal?: AbortSignal) {
+	const response = await http.post<{ data: PurchaseTag }>('/items/purchase_tags', payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function updatePurchaseTag(id: string, payload: PurchaseTagPayload, signal?: AbortSignal) {
+	const response = await http.patch<{ data: PurchaseTag }>(`/items/purchase_tags/${id}`, payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function deletePurchaseTag(id: string, signal?: AbortSignal) {
+	await http.delete(`/items/purchase_tags/${id}`, { signal });
+}
+
 export async function getSupplier(id: string, signal?: AbortSignal) {
 	const response = await http.get<{ data: Supplier }>(`/items/suppliers/${id}`, { signal });
 
@@ -545,6 +670,15 @@ export async function listSupplierQuoteHistory(supplierId: string, signal?: Abor
 
 export async function createInquiryItem(payload: InquiryItemPayload, signal?: AbortSignal) {
 	const response = await http.post<{ data: InquiryItem }>('/items/inquiry_items', payload, { signal });
+
+	return unwrap(response);
+}
+
+export async function uploadFile(file: File, signal?: AbortSignal) {
+	const formData = new FormData();
+	formData.append('file', file);
+
+	const response = await http.post<{ data: UploadedFile }>('/files', formData, { signal });
 
 	return unwrap(response);
 }

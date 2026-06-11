@@ -3,8 +3,10 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { deleteSupplier, listSupplierContacts, listSupplierQuoteHistory, listSuppliers, updateSupplierStatus } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
+import { useAuthStore } from '../stores/auth';
 import type { Supplier, SupplierContact, SupplierQuote } from '../types/purchase-flow';
 
+const auth = useAuthStore();
 const suppliers = ref<Supplier[]>([]);
 const loading = ref(true);
 const submitting = ref(false);
@@ -47,6 +49,8 @@ async function loadSupplierContacts(signal: AbortSignal) {
 }
 
 async function remove(id: string) {
+	if (!auth.isManager) return;
+
 	submitting.value = true;
 	error.value = '';
 
@@ -62,7 +66,7 @@ async function remove(id: string) {
 }
 
 async function toggleStatus(supplier: Supplier) {
-	if (submitting.value) return;
+	if (!auth.isManager || submitting.value) return;
 
 	submitting.value = true;
 	error.value = '';
@@ -154,7 +158,7 @@ onUnmounted(() => {
 				<p class="eyebrow">Suppliers</p>
 				<h2>供应商管理</h2>
 			</div>
-			<RouterLink class="button-link" to="/suppliers/new">新增供应商</RouterLink>
+			<RouterLink v-if="auth.isManager" class="button-link" to="/suppliers/new">新增供应商</RouterLink>
 		</section>
 
 		<p v-if="loading" class="state-card" role="status" aria-live="polite" aria-busy="true">正在加载供应商...</p>
@@ -200,11 +204,12 @@ onUnmounted(() => {
 							<button type="button" class="ghost-button" :disabled="submitting" @click="toggleDetails(supplier)">
 								{{ expandedSupplierId === supplier.id ? '收起' : '详情' }}
 							</button>
-							<button type="button" class="ghost-button" :disabled="submitting" @click="toggleStatus(supplier)">
+							<button v-if="auth.isManager" type="button" class="ghost-button" :disabled="submitting" @click="toggleStatus(supplier)">
 								{{ isActive(supplier.status) ? '停用' : '启用' }}
 							</button>
-							<RouterLink class="text-link" :to="`/suppliers/${supplier.id}/edit`">编辑</RouterLink>
+							<RouterLink v-if="auth.isManager" class="text-link" :to="`/suppliers/${supplier.id}/edit`">编辑</RouterLink>
 							<button
+								v-if="auth.isManager"
 								type="button"
 								class="danger-button"
 								:data-test="`delete-${supplier.id}`"

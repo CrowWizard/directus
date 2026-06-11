@@ -9,17 +9,20 @@ import {
 	createSupplierQuote,
 	deleteSupplierQuote,
 	get询价项Detail,
+	listPurchaseTags,
 	listSuppliers,
 	markViewedAsAccepted,
 	selectFinalQuote,
 	updateInquiryItem,
 	updateSupplierQuote,
 } from '../api/purchase-flow';
+import { DIRECTUS_URL } from '../api/http';
 import AppShell from '../components/app-shell.vue';
 import ConversationPanel from '../components/conversation-panel.vue';
 import InquiryItemKeyInfo from '../components/inquiry-item-key-info.vue';
+import TagMultiSelect from '../components/tag-multi-select.vue';
 import { mapRoleScope, useAuthStore } from '../stores/auth';
-import type { Customer, CustomerQuote, InquiryItemDetail, InquiryState, Supplier, SupplierQuote } from '../types/purchase-flow';
+import type { Customer, CustomerQuote, InquiryItemDetail, InquiryState, PurchaseTag, Supplier, SupplierQuote } from '../types/purchase-flow';
 
 const route = useRoute();
 const auth = useAuthStore();
@@ -40,6 +43,7 @@ const inquiryEditError = ref('');
 const inquiryEditSuccess = ref('');
 const selectedQuoteKey = ref('');
 const suppliers = ref<Supplier[]>([]);
+const tags = ref<PurchaseTag[]>([]);
 const showQuoteForm = ref(false);
 const showInquiryEditForm = ref(false);
 const editingQuoteId = ref<string | null>(null);
@@ -64,7 +68,7 @@ const inquiryEditForm = reactive({
 	target_price: '',
 	priority: 'Normal',
 	remark: '',
-	tags: '',
+	tags: [] as string[],
 });
 
 const quoteForm = reactive({
@@ -197,7 +201,14 @@ function fillInquiryEditForm(currentItem: InquiryItemDetail) {
 	inquiryEditForm.target_price = currentItem.target_price === null || currentItem.target_price === undefined ? '' : String(currentItem.target_price);
 	inquiryEditForm.priority = currentItem.priority || 'Normal';
 	inquiryEditForm.remark = currentItem.remark || '';
-	inquiryEditForm.tags = currentItem.tags || '';
+	inquiryEditForm.tags = parseCsv(currentItem.tags);
+}
+
+function parseCsv(value?: string | null) {
+	return String(value || '')
+		.split(',')
+		.map((part) => part.trim())
+		.filter(Boolean);
 }
 
 function toggleInquiryEditForm() {
@@ -275,6 +286,15 @@ async function loadSuppliers(signal?: AbortSignal) {
 	} catch (err) {
 		if (err instanceof Error && err.name === 'CanceledError') return;
 		error.value = err instanceof Error ? err.message : '供应商加载失败';
+	}
+}
+
+async function loadTags(signal?: AbortSignal) {
+	try {
+		tags.value = (await listPurchaseTags(signal)).filter((tag) => tag.enabled !== false);
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		tags.value = [];
 	}
 }
 
@@ -384,10 +404,30 @@ function getFirstAttachment(value: unknown) {
 
 function getAttachments(value: unknown) {
 	if (!value) return [];
-	if (Array.isArray(value)) return value.map((item) => String(item)).filter(Boolean);
-	if (typeof value === 'string') return value.split(',').map((item) => item.trim()).filter(Boolean);
+	if (Array.isArray(value)) return value.map(normalizeAttachment).filter((item) => item.id);
+	if (typeof value === 'string') return value.split(',').map((item) => normalizeAttachment(item.trim())).filter((item) => item.id);
 
 	return [];
+}
+
+function normalizeAttachment(value: unknown) {
+	if (typeof value === 'object' && value !== null) {
+		const attachment = value as { id?: unknown; filename_download?: unknown; name?: unknown; title?: unknown };
+		const id = String(attachment.id || '').trim();
+		const filename = String(attachment.filename_download || attachment.name || attachment.title || id).trim();
+
+		return { filename, id };
+	}
+
+	const id = String(value || '').trim();
+
+	return { filename: id, id };
+}
+
+function getAttachmentUrl(attachment: { id: string }) {
+	if (/^https?:\/\//i.test(attachment.id)) return attachment.id;
+
+	return `${DIRECTUS_URL}/assets/${encodeURIComponent(attachment.id)}?download`;
 }
 
 function isPositiveNumber(value: string) {
@@ -570,7 +610,7 @@ async function saveInquiryEdit() {
 				quantity: inquiryEditForm.quantity ? Number(inquiryEditForm.quantity) : null,
 				remark: inquiryEditForm.remark.trim(),
 				specification: inquiryEditForm.specification.trim(),
-				tags: inquiryEditForm.tags.trim(),
+				tags: inquiryEditForm.tags.join(','),
 				target_price: inquiryEditForm.target_price ? Number(inquiryEditForm.target_price) : null,
 				unit: inquiryEditForm.unit.trim(),
 			},
@@ -702,6 +742,7 @@ onMounted(() => {
 	const signal = trackRequest();
 	load(signal);
 	loadSuppliers(signal);
+	loadTags(signal);
 });
 
 onUnmounted(() => {
@@ -744,6 +785,15 @@ onUnmounted(() => {
 					<div><dt>目标价格</dt><dd>{{ item.target_price || '-' }}</dd></div>
 					<div><dt>接单时间</dt><dd>{{ item.accepted_at || '-' }}</dd></div>
 					<div><dt>完成时间</dt><dd>{{ item.completed_at || '-' }}</dd></div>
+					<div class="meta-grid__wide">
+						<dt>附件</dt>
+						<dd>
+							<span v-if="getAttachments(item.attachment_ids).length" class="attachment-list">
+								<a v-for="(attachment, index) in getAttachments(item.attachment_ids)" :key="attachment.id" class="text-link" :href="getAttachmentUrl(attachment)" download target="_blank" rel="noreferrer">{{ attachment.filename || `附件 ${index + 1}` }}</a>
+							</span>
+							<span v-else class="muted">暂无询价项附件。</span>
+						</dd>
+					</div>
 				</dl>
 				<p v-if="item.remark" class="note-block">{{ item.remark }}</p>
 				<form v-if="showInquiryEditForm" class="quote-form" data-test="inquiry-edit-form" :aria-busy="inquiryEditSubmitting ? 'true' : undefined" @submit.prevent="saveInquiryEdit">
@@ -766,7 +816,7 @@ onUnmounted(() => {
 					</div>
 					<div class="form-row">
 						<label for="inquiry-edit-target-price">目标价格<input id="inquiry-edit-target-price" v-model="inquiryEditForm.target_price" name="target_price" type="number" min="0" step="0.01" :disabled="inquiryEditSubmitting" /></label>
-						<label for="inquiry-edit-tags">标签<input id="inquiry-edit-tags" v-model="inquiryEditForm.tags" name="tags" :disabled="inquiryEditSubmitting" /></label>
+						<TagMultiSelect v-model="inquiryEditForm.tags" label="标签" :options="tags" :disabled="inquiryEditSubmitting" />
 					</div>
 					<label for="inquiry-edit-remark">备注<textarea id="inquiry-edit-remark" v-model="inquiryEditForm.remark" name="remark" rows="3" :disabled="inquiryEditSubmitting" /></label>
 					<div class="form-actions">
@@ -914,7 +964,7 @@ onUnmounted(() => {
 							<td class="cell-wrap">{{ quote.remark || '-' }}</td>
 							<td><span v-if="quote.is_recommended" class="status-pill">推荐</span><span v-else class="muted">-</span></td>
 							<td class="cell-wrap">
-								<a v-for="attachment in getAttachments(quote.attachment_ids)" :key="attachment" class="text-link" :href="attachment" target="_blank" rel="noreferrer">附件</a>
+								<a v-for="attachment in getAttachments(quote.attachment_ids)" :key="attachment.id" class="text-link" :href="getAttachmentUrl(attachment)" download target="_blank" rel="noreferrer">{{ attachment.filename || '附件' }}</a>
 								<span v-if="getAttachments(quote.attachment_ids).length === 0" class="muted">-</span>
 							</td>
 							<td class="row-actions">
@@ -940,7 +990,7 @@ onUnmounted(() => {
 							<div><dt>推荐</dt><dd>{{ quote.is_recommended ? '已推荐' : '-' }}</dd></div>
 							<div><dt>备注</dt><dd>{{ quote.remark || '-' }}</dd></div>
 							<div><dt>附件</dt><dd>
-								<a v-for="attachment in getAttachments(quote.attachment_ids)" :key="attachment" class="text-link mobile-inline-link" :href="attachment" target="_blank" rel="noreferrer">附件</a>
+								<a v-for="attachment in getAttachments(quote.attachment_ids)" :key="attachment.id" class="text-link mobile-inline-link" :href="getAttachmentUrl(attachment)" download target="_blank" rel="noreferrer">{{ attachment.filename || '附件' }}</a>
 								<span v-if="getAttachments(quote.attachment_ids).length === 0">-</span>
 							</dd></div>
 						</dl>
@@ -1047,13 +1097,6 @@ onUnmounted(() => {
 					</li>
 				</ul>
 				<p v-else class="muted">暂未找到相同品牌、规格参数类似的报价。</p>
-			</section>
-			<section class="info-card">
-				<h3>附件区</h3>
-				<div v-if="getAttachments(item.attachment_ids).length" class="attachment-list">
-					<a v-for="attachment in getAttachments(item.attachment_ids)" :key="attachment" class="text-link" :href="attachment" target="_blank" rel="noreferrer">{{ attachment }}</a>
-				</div>
-				<p v-else class="muted">暂无询价项附件。</p>
 			</section>
 			<section v-if="auth.roleScope === 'Manager'" class="info-card">
 				<h3>经理审批入口</h3>

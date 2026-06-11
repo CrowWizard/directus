@@ -90,6 +90,7 @@ patch_collection assignment_rules 自动分配规则
 patch_collection assignment_accept_tokens 接单令牌
 patch_collection manager_approvals 经理审批
 patch_collection user_task_summaries 用户任务统计
+patch_collection purchase_tags 采购Tag
 
 patch_field customers customer_code 客户编码
 patch_field customers customer_name 客户名称
@@ -230,6 +231,11 @@ patch_field user_task_summaries weekly_completed_task_count 本周完成任务�
 patch_field user_task_summaries active_task_details 进行中任务详情
 patch_field user_task_summaries weekly_completed_task_details 本周完成任务详情
 patch_field user_task_summaries refreshed_at 刷新时间
+
+patch_field purchase_tags tag_name Tag名称
+patch_field purchase_tags enabled 启用
+patch_field purchase_tags created_at 创建时间
+patch_field purchase_tags updated_at 更新时间
 
 echo "中文显示名写入完成。"
 echo "请在 Directus 用户设置里确认界面语言为中文或 ${LANGUAGE}。"

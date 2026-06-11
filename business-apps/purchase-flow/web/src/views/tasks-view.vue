@@ -5,7 +5,7 @@ import { getTasksWithDetails, getUserTaskSummary, type TaskWithDetail } from '..
 import AppShell from '../components/app-shell.vue';
 import TaskProgress from '../components/task-progress.vue';
 import { useAuthStore } from '../stores/auth';
-import type { RoleScope, UserTaskSummary, UserTaskSummaryDetail } from '../types/purchase-flow';
+import type { RoleScope, UserTaskSummary } from '../types/purchase-flow';
 import { getStateLabel } from '../utils/inquiry-state';
 import type { LatestStep } from '../utils/latest-step';
 
@@ -21,7 +21,6 @@ const filters = reactive({
 	state: '',
 	deadline: '',
 	customer: '',
-	buyer: '',
 });
 
 const laneVisibleCount = reactive<Record<string, number>>({});
@@ -110,7 +109,6 @@ const roleLanes = computed(() => {
 const priorities = computed(() => Array.from(new Set(tasks.value.map((task) => task.priority).filter(Boolean))));
 const states = computed(() => Array.from(new Set(tasks.value.map((task) => task.state).filter(Boolean))));
 const normalizedFilterCustomer = computed(() => normalize(filters.customer));
-const normalizedFilterBuyer = computed(() => normalize(filters.buyer));
 
 const filteredTasks = computed(() => {
 	return tasks.value.filter((task) => {
@@ -118,9 +116,8 @@ const filteredTasks = computed(() => {
 		const matchesState = !filters.state || task.state === filters.state;
 		const matchesDeadline = !filters.deadline || String(task.assignment_deadline || '').slice(0, 10) <= filters.deadline;
 		const matchesCustomer = !normalizedFilterCustomer.value || normalize(customerName(task)).includes(normalizedFilterCustomer.value);
-		const matchesBuyer = !normalizedFilterBuyer.value || normalize(personName(task.buyer_owner_id)).includes(normalizedFilterBuyer.value);
 
-		return matchesPriority && matchesState && matchesDeadline && matchesCustomer && matchesBuyer;
+		return matchesPriority && matchesState && matchesDeadline && matchesCustomer;
 	});
 });
 
@@ -129,7 +126,6 @@ function clearFilters() {
 	filters.state = '';
 	filters.deadline = '';
 	filters.customer = '';
-	filters.buyer = '';
 }
 
 function getLaneVisibleCount(lane: string) {
@@ -166,35 +162,6 @@ const taskGroups = computed(() => {
 	});
 });
 
-function parseSummaryDetails(value: UserTaskSummary['active_task_details']): UserTaskSummaryDetail[] {
-	if (!value) return [];
-
-	const parsed = typeof value === 'string' ? safeParseJson(value) : value;
-	if (Array.isArray(parsed)) return parsed as UserTaskSummaryDetail[];
-	if (parsed && typeof parsed === 'object') return Object.values(parsed) as UserTaskSummaryDetail[];
-
-	return [];
-}
-
-function safeParseJson(value: string) {
-	try {
-		return JSON.parse(value) as unknown;
-	} catch {
-		return [];
-	}
-}
-
-function summaryTaskId(detail: UserTaskSummaryDetail) {
-	return detail.inquiry_item_id || detail.id || '';
-}
-
-function summaryOwner(detail: UserTaskSummaryDetail) {
-	return detail.owner_name || detail.owner || detail.buyer_name || detail.buyer || detail.sales_name || detail.sales || '-';
-}
-
-const activeSummaryDetails = computed(() => parseSummaryDetails(summary.value?.active_task_details));
-const weeklySummaryDetails = computed(() => parseSummaryDetails(summary.value?.weekly_completed_task_details));
-
 onMounted(() => {
 	loadTasks(requestController.signal);
 });
@@ -226,7 +193,7 @@ onUnmounted(() => {
 				</article>
 				<article class="summary-tile">
 					<span>本周完成</span>
-					<strong>{{ summary?.weekly_completed_task_count ?? weeklySummaryDetails.length }}</strong>
+					<strong>{{ summary?.weekly_completed_task_count ?? '-' }}</strong>
 				</article>
 				<article class="summary-tile">
 					<span>累计完成</span>
@@ -264,10 +231,6 @@ onUnmounted(() => {
 					<label>
 						客户
 						<input v-model="filters.customer" placeholder="输入客户名称" />
-					</label>
-					<label>
-						采购员
-						<input v-model="filters.buyer" placeholder="输入采购员名称" />
 					</label>
 				</div>
 			</section>
@@ -327,43 +290,6 @@ onUnmounted(() => {
 				</article>
 			</section>
 
-			<section class="info-card">
-				<div class="card-header-row">
-					<div>
-						<h3>任务摘要详情</h3>
-						<p class="muted">保留快照摘要，便于快速判断负责人、客户和截止时间。</p>
-					</div>
-				</div>
-				<div v-if="activeSummaryDetails.length" class="summary-detail-list">
-					<article v-for="detail in activeSummaryDetails" :key="summaryTaskId(detail) || detail.inquiry_no" class="summary-detail-card">
-						<div class="task-card__top">
-							<div>
-								<p class="muted">{{ detail.inquiry_no || summaryTaskId(detail) || '未关联询价编号' }}</p>
-								<h4>{{ detail.product_name || '未命名任务' }}</h4>
-							</div>
-							<span class="status-pill status-pill--neutral">{{ getStateLabel(detail.state || detail.status) }}</span>
-						</div>
-						<dl class="meta-grid">
-							<div><dt>优先级</dt><dd>{{ detail.priority || '-' }}</dd></div>
-							<div><dt>截止时间</dt><dd>{{ detail.deadline || detail.assignment_deadline || '-' }}</dd></div>
-							<div><dt>客户</dt><dd>{{ detail.customer_name || detail.customer || '-' }}</dd></div>
-							<div><dt>负责人</dt><dd>{{ summaryOwner(detail) }}</dd></div>
-						</dl>
-						<RouterLink v-if="summaryTaskId(detail)" class="text-link" :to="`/inquiry-items/${summaryTaskId(detail)}/detail`">快捷处理</RouterLink>
-					</article>
-				</div>
-				<p v-else class="muted">暂无可视化摘要详情。</p>
-				<div v-if="weeklySummaryDetails.length" class="completed-strip">
-					<h4>本周完成</h4>
-					<ul>
-						<li v-for="detail in weeklySummaryDetails" :key="`done-${summaryTaskId(detail) || detail.inquiry_no}`">
-							<span>{{ detail.inquiry_no || summaryTaskId(detail) || '-' }}</span>
-							<strong>{{ detail.product_name || '未命名任务' }}</strong>
-							<small>{{ detail.completed_at || detail.updated_at || '-' }}</small>
-						</li>
-					</ul>
-				</div>
-			</section>
 		</div>
 	</AppShell>
 </template>
