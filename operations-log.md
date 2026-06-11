@@ -73,3 +73,94 @@
 - 执行 `pnpm test -- auth.test.ts`，结果 9 个测试文件、39 个用例通过。
 - 执行 `pnpm typecheck`，结果通过且无错误输出。
 - 新增 `purchase-flow-cleanup.md`，记录采购流程业务流水数据清理范围、SQL 删除顺序和重新初始化建议，未执行数据库删除操作。
+- 修改 `extensions/purchase-flow-actions/dist/index.js`：新增 `POST /purchase-flow-actions/mark-viewed-as-accepted`，当前采购负责人打开自己 `Assigned` 状态询价时可自动标记为开始处理，写入 `accepted_at`、切换到 `Purchasing`、作废未使用接单 token、写入沟通记录并刷新任务统计。
+- 修改独立前端询价详情页：采购员打开自己的未接单询价详情时自动调用上述动作，避免后续 scanner 按未接单超时重新分配。
+- 补充 `purchase-flow.test.ts` 和 `inquiry-item-detail-view.test.ts` 覆盖网页打开详情自动接单逻辑。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、41 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 修改询价项详情接口字段：`get询价项Summary` 显式展开 `customer_id.customer_name`、客户编码、外贸员和采购员姓名/邮箱，避免详情页显示关系 ID。
+- 补充详情页测试，覆盖基础信息区客户和重点信息区当前责任人显示名称而不是 ID。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、42 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 优化询价项详情页权限展示：审批状态展示仅经理可见，最终报价内容仅询价发起外贸员可见。
+- 新增 `purchase-flow-actions` 后端动作：`communicate` 用于仅沟通并通知对方，`complete-supplier-quote` 用于采购完成报价并通知外贸。
+- 扩展 `communicate-and-transition` 和 `submit-customer-quote`：沟通状态流转后通知对方，外贸提交/修改客户报价后通知采购。
+- 详情页新增采购“完成报价”按钮，调用后端动作把状态推进到 `WaitingSalesReview` 并触发企业微信通知。
+- 更新安装脚本输出，列出 `communicate`、`complete-supplier-quote` 和 `mark-viewed-as-accepted` endpoint。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、45 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 修复询价项详情页基础信息区被错误绑定经理可见条件的问题：基础信息区恢复所有角色可见，审批状态展示改为仅经理可见。
+- 补充详情页测试覆盖采购员也能看到基础信息区且看不到审批状态展示。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts`，结果 9 个测试文件、46 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 新增外贸员修改询价项能力：发起该询价项的外贸员在最终报价完成前可在详情页基础信息区编辑产品、客户、项目、品牌、型号、规格、数量、目标价、优先级、备注和标签。
+- 新增 `POST /purchase-flow-actions/update-inquiry` 后端动作：校验当前用户必须是发起外贸员，且询价项不能是 `Quoted` 或 `Closed`，保存后写沟通记录、刷新任务统计并通过企业微信通知采购。
+- 更新前端 `updateInquiryItem` API、详情页编辑表单和安装脚本 endpoint 输出。
+- 补充 `purchase-flow.test.ts` 和 `inquiry-item-detail-view.test.ts` 覆盖询价项修改接口和详情页编辑流程。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、48 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 调整最终报价流程：详情页最终报价改为单选一条供应商报价，不再手工填写客户报价表单。
+- 新增 `POST /purchase-flow-actions/select-final-quote`：根据选中的供应商报价生成 `customer_quotes`，超过 `priority_rules.approval_threshold` 时创建经理审批，否则状态进入 `Quoted` 并写入完成时间。
+- 新增 `POST /purchase-flow-actions/close-inquiry`：发起外贸员或经理可手动结束询价，状态进入 `Closed` 并写入关闭沟通记录。
+- 调整 `update-inquiry`：外贸员修改询价项后状态退回 `Purchasing`，表示需要采购再次报价。
+- 更新详情页：询价内容选择控件改为单选，最终报价按钮调用后端动作，新增“结束询价”区域。
+- 更新安装脚本输出，列出 `select-final-quote` 和 `close-inquiry` endpoint。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、50 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 修复修改项明细误报：后端 `getChangedFieldDetails` 增加前端字段名到数据库字段名映射，并只保留真实变化字段，避免未修改字段进入“字段：原值 -> 新值”。
+- 修复修改项原值错误为空：后端改为从更新前数据库行的真实 snake_case 字段读取原值，前端供应商报价比较增加统一空值/数组/数字格式化。
+- 补充详情页测试，确认供应商报价仅展示真实变化字段，不展示未变更的币种和货期。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、50 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 继续修复询价项修改原值仍显示为空：`getInquiryForUpdate` 原先只查询了产品、品牌、状态和负责人等少数字段，导致型号、规格、数量、目标价、备注、标签等旧值必然为 `undefined`。
+- 补全 `getInquiryForUpdate` 的询价基础信息字段，并让 `updateInquiry` 只写入真实变化字段，避免未变化字段进入更新和修改明细。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、50 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 限制采购完成报价：无供应商报价时前端与后端均阻止完成报价，并提示先添加供应商报价。
+- 增加完成后冻结：询价项进入 `Quoted` 或 `Closed` 后，详情页禁止编辑询价项和供应商报价。
+- 优化供应商报价修改提示：本人修改报价后提示具体修改项，并提示点击“完成报价”通知外贸；完成报价通知会携带最近修改项。
+- 优化询价项修改通知：外贸修改询价项后，沟通记录和企业微信通知均包含具体修改字段中文名。
+- 将 `WaitingSalesReview` 中文文案从“待销售确认”改为“待外贸确认”，下一步动作改为“外贸员确认最终报价”。
+- 询价项列表新增本地查询筛选：状态、名称/询价号/品牌/型号、客户、更新时间早于。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts inquiry-items-view`，结果 9 个测试文件、50 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 优化修改项展示格式：后端新增 `getChangedFieldDetails` 函数，生成"字段：原值 -> 新值"格式的修改明细。
+- 后端 `updateInquiry` 函数缓存 `changedFieldDetails`，确保沟通记录和企业微信通知均显示修改前后的值。
+- 前端 `getSupplierQuoteChangedFields` 函数返回"字段：原值 -> 新值"格式，供应商报价修改后提示具体变更内容。
+- 更新测试用例以匹配新的"原值 -> 新值"格式。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、50 个用例通过。
+- 执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 排查询价项 `29994160-548a-4af6-9c62-a8655ee010a5`：数据库状态为 `Purchasing`，采购负责人为采购 B，供应商报价由采购 B 创建，后端 `PATCH /items/supplier_quotes/:id` 校验通过。
+- 修复询价项详情页供应商报价操作按钮：当前采购负责人在 `Purchasing` 状态下可编辑/删除该询价项报价，不再仅限报价创建人。
+- 补充 `inquiry-item-detail-view.test.ts` 覆盖采购负责人编辑其他用户创建报价的场景。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts`，结果 9 个测试文件、51 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 修复供应商报价更新 403：`supplier_quotes` 实际表结构不存在 `moq` 字段，前端提交该字段会被 Directus 拦截。
+- 移除供应商报价表单、列表、移动端展示、类型定义、payload 和测试中的 `moq` 残留引用。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、51 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 修复编辑供应商报价时供应商下拉框为空：报价查询字段补充 `supplier_id.id`，确保关系对象可回填到表单选项值。
+- 补充 API 和详情页测试，覆盖供应商关系 ID 加载与编辑表单供应商选中状态。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、52 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 限制供应商报价新增入口：仅当前分配采购负责人可在询价内容中添加供应商报价，外贸员和非负责人采购不显示添加按钮。
+- 调整最终报价流程：外贸员选择供应商报价后回填最终报价输入框，可修改价格、币种、货期和备注后提交；后端 `select-final-quote` 支持这些覆盖字段写入 `customer_quotes`。
+- 调整新增沟通表单状态动作文案为“交给外贸员补充报价信息”和“交给采购员再次报价”，并按角色过滤：外贸员不能选择交给外贸员，采购员不能选择交给采购员。
+- 补充详情页和 API 测试覆盖添加报价权限、最终报价覆盖字段、沟通动作角色过滤。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 9 个测试文件、55 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 调整最终报价内容展示：移除最终报价表单下方重复的供应商报价桌面和移动端列表，最终报价之后仅保留客户报价历史。
+- 补充详情页测试，确认最终报价区域不再显示上方供应商报价内容，选择供应商报价仍通过“询价内容”区域完成。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts`，结果 9 个测试文件、55 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 完成状态锁定交互：`Quoted` 或 `Closed` 询价项不再显示最终报价表单，沟通面板改为只读提示，并在提交函数内增加防御校验。
+- 增加 `http` 响应拦截器：识别 Directus `TOKEN_EXPIRED` 或 `Token expired.` 响应后清理本地 access/refresh token，并返回中文登录过期提示。
+- 补充详情页和 HTTP 客户端测试覆盖完成状态锁定、token 过期清理和友好错误提示。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts http.test.ts auth.test.ts`，结果 10 个测试文件、57 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出。
+- 接入经理审批入口：前端新增审批备注输入框，审批通过和审批拒绝按钮调用 `/purchase-flow-actions/approve-customer-quote`，提交后刷新详情并展示结果。
+- 明确审批拒绝流程：复用后端已有逻辑将询价项退回 `WaitingSalesReview`，外贸可修改最终报价后再次提交审批。
+- 更新安装脚本输出，补充 `/purchase-flow-actions/approve-customer-quote` endpoint。
+- 补充详情页和 API 测试覆盖审批拒绝备注、状态退回和动作接口参数。
+- 执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts`，结果 10 个测试文件、59 个用例通过；执行 `pnpm typecheck`，结果通过且无错误输出；执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过。
+- 调整审批后通知：经理审批通过或拒绝客户报价后，通过企业微信通知询价发起外贸员；拒绝通知提示修改最终报价后再次提交审批。
+- 修正旧客户报价提交动作的企业微信通知标题为“外贸已提交最终报价”，避免与询价项基础信息修改混淆。
+- 限制最终报价唯一性：`select-final-quote` 和旧 `submit-customer-quote` 动作均改为按询价项复用最新一条 `customer_quotes`，拒绝后再次提交只更新该记录，不再重复新增最终报价。
+- 复用待审批记录：重新提交仍需审批且已有 `Pending` 审批时，更新原 `manager_approvals`，避免同一最终报价产生重复待审批记录。
+- 执行 `node --check extensions/purchase-flow-actions/dist/index.js`，结果通过；执行 `pnpm test -- inquiry-item-detail-view.test.ts purchase-flow.test.ts && pnpm typecheck`，结果 10 个测试文件、59 个用例通过且类型检查通过。
+- 调整完成后最终报价可见性：询价项进入 `Quoted` 或 `Closed` 后，发起外贸员仍可查看“最终报价内容”和客户报价历史，但最终报价提交表单保持隐藏，避免重复提交。
+- 补充详情页测试覆盖完成后外贸员仍可看到最终报价历史；首次执行 `pnpm test -- inquiry-item-detail-view.test.ts && pnpm typecheck` 遇到底层段错误，重跑 `pnpm test -- inquiry-item-detail-view.test.ts` 后 10 个测试文件、59 个用例通过，随后 `pnpm typecheck` 通过。
+- 扩展最终报价查看权限：经理始终可查看“最终报价内容”和客户报价历史，但不能看到最终报价提交表单。
+- 补充详情页测试覆盖经理完成后查看最终报价历史；执行 `pnpm test -- inquiry-item-detail-view.test.ts && pnpm typecheck`，结果 10 个测试文件、60 个用例通过且类型检查通过。

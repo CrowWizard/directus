@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
 import { RouterLink } from 'vue-router';
 import { createInquiryItem, listInquiryItems } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
@@ -7,6 +7,7 @@ import InquiryItemForm from '../components/inquiry-item-form.vue';
 import TaskProgress from '../components/task-progress.vue';
 import { useAuthStore } from '../stores/auth';
 import type { InquiryItemRow } from '../types/purchase-flow';
+import { getStateLabel } from '../utils/inquiry-state';
 
 const auth = useAuthStore();
 const items = ref<InquiryItemRow[]>([]);
@@ -15,6 +16,13 @@ const error = ref('');
 const showForm = ref(false);
 const submitting = ref(false);
 const formVersion = ref(0);
+
+const filters = reactive({
+	state: '',
+	keyword: '',
+	customer: '',
+	updatedBefore: '',
+});
 
 const requestController = new AbortController();
 
@@ -29,6 +37,26 @@ function customerName(customer?: { customer_name?: string } | string | null): st
 	if (!customer || typeof customer === 'string') return '-';
 	return customer.customer_name || '-';
 }
+
+function normalize(value?: string | null) {
+	return String(value || '').trim().toLowerCase();
+}
+
+const filteredItems = computed(() => {
+	const keyword = normalize(filters.keyword);
+	const customer = normalize(filters.customer);
+
+	return items.value.filter((item) => {
+		const itemCustomerName = customerName(item.customer_id);
+		const matchesState = !filters.state || item.state === filters.state;
+		const matchesKeyword = !keyword || [item.inquiry_no, item.product_name, item.brand, item.model, item.project_name]
+			.some((value) => normalize(value).includes(keyword));
+		const matchesCustomer = !customer || normalize(itemCustomerName).includes(customer);
+		const matchesUpdatedBefore = !filters.updatedBefore || String(item.updated_at || '').slice(0, 10) <= filters.updatedBefore;
+
+		return matchesState && matchesKeyword && matchesCustomer && matchesUpdatedBefore;
+	});
+});
 
 async function load(signal: AbortSignal) {
 	if (!auth.currentUser?.id) {
@@ -97,9 +125,18 @@ onUnmounted(() => {
 			@cancel="showForm = false"
 		/>
 
+		<section class="filter-panel" aria-label="询价项查询">
+			<div class="filter-panel__grid">
+			<label>状态<select v-model="filters.state"><option value="">全部状态</option><option value="Draft">{{ getStateLabel('Draft') }}</option><option value="Assigned">{{ getStateLabel('Assigned') }}</option><option value="Purchasing">{{ getStateLabel('Purchasing') }}</option><option value="WaitingSalesReview">{{ getStateLabel('WaitingSalesReview') }}</option><option value="Quoted">{{ getStateLabel('Quoted') }}</option><option value="Closed">{{ getStateLabel('Closed') }}</option></select></label>
+			<label>名称/编号<input v-model="filters.keyword" type="search" placeholder="产品、询价号、品牌、型号" /></label>
+			<label>客户<input v-model="filters.customer" type="search" placeholder="客户名称" /></label>
+			<label>更新时间早于<input v-model="filters.updatedBefore" type="date" /></label>
+			</div>
+		</section>
+
 		<p v-if="error && !showForm" class="state-card error" role="status" aria-live="polite">{{ error }}</p>
 		<p v-if="loading" class="state-card" role="status" aria-live="polite" aria-busy="true">正在加载询价项...</p>
-		<p v-else-if="items.length === 0 && !showForm" class="state-card" role="status" aria-live="polite">暂无询价项</p>
+		<p v-else-if="filteredItems.length === 0 && !showForm" class="state-card" role="status" aria-live="polite">暂无询价项</p>
 		<div v-else class="table-card">
 			<table>
 				<thead>
@@ -119,7 +156,7 @@ onUnmounted(() => {
 					</tr>
 				</thead>
 				<tbody>
-					<tr v-for="item in items" :key="item.id">
+					<tr v-for="item in filteredItems" :key="item.id">
 						<td>{{ item.inquiry_no || item.id }}</td>
 						<td>{{ item.product_name || '-' }}</td>
 						<td>{{ item.brand || '-' }} / {{ item.model || '-' }}</td>

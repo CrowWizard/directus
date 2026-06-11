@@ -20,7 +20,6 @@ function supplierName(supplier: SupplierQuote['supplier_id']) {
 				<tr>
 					<th scope="col">供应商</th>
 					<th scope="col">报价</th>
-					<th scope="col">MOQ</th>
 					<th scope="col">交期</th>
 					<th scope="col">报价时间</th>
 				</tr>
@@ -29,7 +28,6 @@ function supplierName(supplier: SupplierQuote['supplier_id']) {
 				<tr v-for="quote in quotes" :key="quote.id || `${quote.price}-${quote.quoted_at}`">
 					<td>{{ supplierName(quote.supplier_id) }}</td>
 					<td>{{ quote.price || '-' }} {{ quote.currency || '' }}</td>
-					<td>{{ quote.moq || '-' }}</td>
 					<td>{{ quote.lead_time || '-' }}</td>
 					<td>{{ quote.quoted_at || '-' }}</td>
 				</tr>
@@ -42,7 +40,6 @@ function supplierName(supplier: SupplierQuote['supplier_id']) {
 					<span>{{ quote.price || '-' }} {{ quote.currency || '' }}</span>
 				</div>
 				<dl class="mobile-table-meta">
-					<div><dt>MOQ</dt><dd>{{ quote.moq || '-' }}</dd></div>
 					<div><dt>交期</dt><dd>{{ quote.lead_time || '-' }}</dd></div>
 					<div><dt>报价时间</dt><dd>{{ quote.quoted_at || '-' }}</dd></div>
 				</dl>

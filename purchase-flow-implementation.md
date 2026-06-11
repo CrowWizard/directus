@@ -1,6 +1,110 @@
 # 外贸询价采购报价流程落地记录
 
-更新时间：2026-06-09
+更新时间：2026-06-11
+
+## 2026-06-11 项目现状摘要
+
+本节基于 `extensions`、`scripts` 和 `business-apps/purchase-flow/web` 三个目录同步当前采购流程现状，后续不需要每次重新从目录结构开始分析。
+
+### 目录职责
+
+| 目录 | 当前职责 | 结论 |
+| ---- | -------- | ---- |
+| `extensions` | 承载 Directus 采购流程 Hook 和 Endpoint，负责自动编号、自动分配、接单校验、业务动作、扫描提醒和统计刷新 | 服务端业务规则已集中到扩展层，前端不应自行拼接关键状态流转 |
+| `scripts` | 承载初始化、增量迁移、权限、翻译、安装扩展、任务统计重建和历史兼容处理脚本 | 项目具备可重复部署能力，但后续字段/权限变化应继续走独立增量脚本 |
+| `business-apps/purchase-flow/web` | 独立 Vue 3 采购报价工作台，覆盖登录、接单、任务、客户、供应商、询价详情、报价、审批和沟通 | 已形成独立业务应用，不只是 Directus 后台配置补充 |
+
+### 服务端扩展现状
+
+当前 `extensions` 下采购流程相关扩展包括：
+
+- `purchase-flow-auto-id`：Hook，负责自定义集合 UUID、询价编号、自动分配采购员、生成接单 Token、企业微信通知、采购员任务数和用户任务统计刷新。
+- `purchase-flow-accept`：Endpoint，负责接单链接和 JSON 接单接口，校验 Token、登录用户、采购员身份和询价项当前负责人。
+- `purchase-flow-actions`：Endpoint，负责前端业务动作收口，包括沟通、状态流转、供应商报价完成、查看即接单、询价更新、选择最终报价、关闭询价、客户报价提交、经理审批和历史类似报价查询。
+- `purchase-flow-scanner`：Endpoint，负责定时或经理手动触发超时重分配和供应商报价缺字段提醒。
+
+`purchase-flow-actions` 当前实际接口比早期记录更完整：
+
+```text
+GET  /purchase-flow-actions/inquiries/:id/similar-quotes
+POST /purchase-flow-actions/communicate-and-transition
+POST /purchase-flow-actions/communicate
+POST /purchase-flow-actions/complete-supplier-quote
+POST /purchase-flow-actions/mark-viewed-as-accepted
+POST /purchase-flow-actions/update-inquiry
+POST /purchase-flow-actions/select-final-quote
+POST /purchase-flow-actions/close-inquiry
+POST /purchase-flow-actions/submit-customer-quote
+POST /purchase-flow-actions/approve-customer-quote
+```
+
+因此，早期建议中的 `submit-supplier-quote`、`close-inquiry`、最终报价选择等能力，已经部分或全部由 `complete-supplier-quote`、`select-final-quote`、`close-inquiry` 等语义化接口覆盖。后续重点不是再扩散 CRUD，而是继续把高风险动作固定在服务端 Endpoint 中，保证权限、状态、沟通记录和任务统计一致。
+
+### 脚本现状
+
+`scripts` 目录当前覆盖以下能力：
+
+- 全量初始化：`init-purchase-flow.sh` 串联集合、关系、权限、主数据、用户、规则、翻译、Flow 和扩展安装。
+- 集合与配置初始化：`init-purchase-flow-collections.sh`、`init-purchase-flow-relations.sh`、`init-purchase-flow-permissions.sh`、`init-purchase-flow-translations.sh`、`init-purchase-flow-master-data.sh`、`init-purchase-flow-users.sh`。
+- 任务统计：`init-purchase-flow-task-summary.sh`、`configure-user-task-summary-display.sh`、`rebuild-user-task-summaries.sh`。
+- 扩展安装：`install-purchase-flow-auto-id-hook.sh`、`install-purchase-flow-accept-endpoint.sh`、`install-purchase-flow-actions-endpoint.sh`、`install-purchase-flow-scanner-endpoint.sh`。
+- 增量修复和兼容：`migrate-purchase-flow-20260608-add-task-summary.sh`、`fix-purchase-flow-auto-uuid-meta.sh`、`disable-purchase-flow-legacy-wechat-flow.sh`、`init-directus-users-wechat-work-field.sh`。
+
+后续维护原则：初始化脚本只做稳定基础设施，业务迭代新增字段、权限、展示配置和历史数据修复应继续新增独立增量脚本，避免全量脚本承担不可控升级逻辑。
+
+### 独立前端现状
+
+`business-apps/purchase-flow/web` 是独立 Vue 3 应用，技术栈为 Vue 3.5、Vue Router、Pinia、Axios、Vite、Vitest 和 vue-tsc。
+
+当前页面路由包括：
+
+```text
+/login
+/tasks
+/purchase-flow-accept/accept
+/customers
+/customers/new
+/customers/:id/edit
+/suppliers
+/suppliers/new
+/suppliers/:id/edit
+/inquiry-items
+/inquiry-items/:id
+/inquiry-items/:id/detail
+```
+
+当前前端已接入的关键服务端业务接口包括：
+
+- `mark-viewed-as-accepted`：询价详情查看后标记接单。
+- `complete-supplier-quote`：采购员完成供应商报价后推进流程。
+- `select-final-quote`：外贸侧选择最终供应商报价并形成客户报价/审批。
+- `close-inquiry`：关闭询价。
+- `approve-customer-quote`：经理审批客户报价。
+- `similar-quotes`：获取历史类似报价推荐。
+
+前端仍存在一部分普通 CRUD：客户、供应商、联系人、供应商报价新增/编辑/删除等。低风险主数据 CRUD 可以保留在前端直连 Directus；涉及状态、权限、审批、统计、通知和审计的动作应继续走 `purchase-flow-actions`。
+
+### 当前能力边界
+
+已经落地的核心闭环：
+
+1. 外贸员创建询价项。
+2. Hook 自动编号并按采购员画像分配采购员。
+3. 系统生成接单 Token 并可通过企业微信通知采购员。
+4. 采购员通过接单链接或前端详情进入处理。
+5. 采购员补齐供应商报价并推进给外贸复核。
+6. 外贸员选择最终报价，生成客户报价，必要时触发经理审批。
+7. 经理审批通过或拒绝。
+8. 外贸员或经理关闭询价。
+9. 扫描器处理未接单超时重分配和供应商报价缺字段提醒。
+10. 用户任务统计由服务端刷新，前端负责展示。
+
+当前最重要的设计边界：
+
+- 服务端扩展负责业务事实：状态、权限、负责人、审批、统计、通知、审计记录。
+- 独立前端负责业务工作台体验：筛选、录入、比较、提示、跳转和可视化。
+- 脚本负责环境搭建和增量变更：集合、字段、权限、翻译、默认数据、扩展安装和历史修复。
+- AI 能力应优先作为辅助决策、资料提取、风险识别和流程自动化增强，而不是绕过现有权限和状态机直接写业务结果。
 
 ## 目标
 

@@ -1,5 +1,6 @@
 import type {
 	CommentAndStatePayload,
+	FinalQuotePayload,
 	Conversation,
 	ConversationPayload,
 	Customer,
@@ -35,12 +36,66 @@ export type AcceptAssignmentResult = {
 	inquiry_item_id: string;
 };
 
+export type MarkViewedAsAcceptedResult = {
+	accepted: boolean;
+	inquiry_item_id: string;
+	state: InquiryState;
+};
+
+export type CompleteSupplierQuoteResult = {
+	inquiry_item_id: string;
+	state: InquiryState;
+};
+
+export type UpdateInquiryResult = {
+	inquiry_item_id: string;
+	state?: InquiryState;
+	updated_fields: string[];
+};
+
+export type SelectFinalQuoteResult = {
+	approval_required: boolean;
+	approval_status: string;
+	customer_quote_id: string;
+	inquiry_item_id: string;
+	manager_approval_id?: string | null;
+	state: InquiryState;
+};
+
+export type CloseInquiryResult = {
+	inquiry_item_id: string;
+	state: InquiryState;
+};
+
+export type ApproveCustomerQuoteDecision = 'Approved' | 'Rejected';
+
+export type ApproveCustomerQuoteResult = {
+	approval_status: string;
+	customer_quote_id: string;
+	inquiry_item_id: string;
+	manager_approval_id: string;
+	state: InquiryState;
+};
+
 export type ApiErrorDetail = Error & {
 	status?: number;
 	code?: string;
 };
 
-const summaryFields = ['*'];
+const summaryFields = [
+	'*',
+	'customer_id.id',
+	'customer_id.customer_code',
+	'customer_id.customer_name',
+	'sales_owner_id.id',
+	'sales_owner_id.email',
+	'sales_owner_id.first_name',
+	'sales_owner_id.last_name',
+	'buyer_owner_id.id',
+	'buyer_owner_id.email',
+	'buyer_owner_id.first_name',
+	'buyer_owner_id.last_name',
+];
 
 const listFields = [
 	'id',
@@ -165,7 +220,7 @@ export async function get询价项Summary(询价项Id: string, signal?: AbortSig
 export async function getSupplierQuotes(询价项Id: string | string[], signal?: AbortSignal) {
 	const response = await http.get<{ data: SupplierQuote[] }>('/items/supplier_quotes', {
 		params: {
-			fields: ['*', 'supplier_id.supplier_name', 'supplier_id.supplier_code', 'quoted_by.first_name', 'quoted_by.last_name', 'inquiry_item_id'],
+			fields: ['*', 'supplier_id.id', 'supplier_id.supplier_name', 'supplier_id.supplier_code', 'quoted_by.first_name', 'quoted_by.last_name', 'inquiry_item_id'],
 			filter: buildInquiryItemFilter(询价项Id),
 			sort: ['-quoted_at'],
 			limit: -1,
@@ -250,6 +305,56 @@ export async function get询价项Detail(询价项Id: string, signal?: AbortSign
 	]);
 
 	return { ...summary, conversations, supplier_quotes: supplierQuotes, customer_quotes: customerQuotes, manager_approvals: managerApprovals };
+}
+
+export async function markViewedAsAccepted(询价项Id: string, signal?: AbortSignal) {
+	const response = await http.post<{ data: MarkViewedAsAcceptedResult }>(
+		'/purchase-flow-actions/mark-viewed-as-accepted',
+		{ inquiry_item_id: 询价项Id },
+		{ signal },
+	);
+
+	return unwrap(response);
+}
+
+export async function completeSupplierQuote(询价项Id: string, changedFields: string[] = [], signal?: AbortSignal) {
+	const response = await http.post<{ data: CompleteSupplierQuoteResult }>(
+		'/purchase-flow-actions/complete-supplier-quote',
+		{ changed_fields: changedFields, inquiry_item_id: 询价项Id },
+		{ signal },
+	);
+
+	return unwrap(response);
+}
+
+export async function selectFinalQuote(询价项Id: string, supplierQuoteId: string, payload: FinalQuotePayload = {}, signal?: AbortSignal) {
+	const response = await http.post<{ data: SelectFinalQuoteResult }>(
+		'/purchase-flow-actions/select-final-quote',
+		{ ...payload, inquiry_item_id: 询价项Id, supplier_quote_id: supplierQuoteId },
+		{ signal },
+	);
+
+	return unwrap(response);
+}
+
+export async function closeInquiry(询价项Id: string, reason = '', signal?: AbortSignal) {
+	const response = await http.post<{ data: CloseInquiryResult }>(
+		'/purchase-flow-actions/close-inquiry',
+		{ inquiry_item_id: 询价项Id, reason },
+		{ signal },
+	);
+
+	return unwrap(response);
+}
+
+export async function approveCustomerQuote(approvalId: string, decision: ApproveCustomerQuoteDecision, reason = '', signal?: AbortSignal) {
+	const response = await http.post<{ data: ApproveCustomerQuoteResult }>(
+		'/purchase-flow-actions/approve-customer-quote',
+		{ approval_id: approvalId, decision, reason },
+		{ signal },
+	);
+
+	return unwrap(response);
 }
 
 export async function getTasksWithDetails(
@@ -444,6 +549,16 @@ export async function createInquiryItem(payload: InquiryItemPayload, signal?: Ab
 	return unwrap(response);
 }
 
+export async function updateInquiryItem(询价项Id: string, payload: InquiryItemPayload, signal?: AbortSignal) {
+	const response = await http.post<{ data: UpdateInquiryResult }>(
+		'/purchase-flow-actions/update-inquiry',
+		{ ...payload, inquiry_item_id: 询价项Id },
+		{ signal },
+	);
+
+	return unwrap(response);
+}
+
 export async function acceptAssignment(token: string, signal?: AbortSignal) {
 	try {
 		const response = await http.get<{ data: AcceptAssignmentResult }>('/purchase-flow-accept/accept-json', {
@@ -497,13 +612,14 @@ export async function commentAndUpdateState(payload: CommentAndStatePayload, sig
 		return unwrap(response);
 	}
 
-	await createConversation(
+	const response = await http.post<{ data: { inquiry_item_id: string } }>(
+		'/purchase-flow-actions/communicate',
 		{
-			actor_id: payload.actor_id,
 			content: payload.content,
 			inquiry_item_id: payload.inquiry_item_id,
-			metadata: payload.metadata,
 		},
-		signal,
+		{ signal },
 	);
+
+	return unwrap(response);
 }

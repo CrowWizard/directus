@@ -58,7 +58,6 @@ export type SupplierQuote = {
 	price?: number | string | null;
 	inquiry_price?: number | string | null;
 	currency?: string | null;
-	moq?: number | string | null;
 	lead_time?: string | null;
 	quoted_at?: string | null;
 	remark?: string | null;
@@ -201,7 +200,6 @@ export type SupplierQuotePayload = {
 	price?: number | string | null;
 	inquiry_price?: number | string | null;
 	currency?: string | null;
-	moq?: number | string | null;
 	lead_time?: string | null;
 	quoted_by?: string | null;
 	quoted_at?: string | null;
@@ -220,6 +218,14 @@ export type CustomerQuotePayload = {
 	quoted_at?: string | null;
 	remark?: string | null;
 	approval_status?: string | null;
+};
+
+export type FinalQuotePayload = {
+	price?: number | string | null;
+	currency?: string | null;
+	lead_time?: string | null;
+	remark?: string | null;
+	approval_reason?: string | null;
 };
 
 export type ConversationPayload = {

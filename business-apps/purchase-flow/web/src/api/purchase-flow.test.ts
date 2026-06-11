@@ -2,14 +2,21 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { http } from './http';
 import {
 	acceptAssignment,
+	approveCustomerQuote,
+	closeInquiry,
 	commentAndUpdateState,
+	completeSupplierQuote,
 	createInquiryItem,
 	createSupplierQuote,
 	deleteSupplierQuote,
 	getTasks,
 	getTasksWithDetails,
+	getSupplierQuotes,
 	get询价项Summary,
 	listInquiryItems,
+	markViewedAsAccepted,
+	selectFinalQuote,
+	updateInquiryItem,
 	updateSupplierQuote,
 } from './purchase-flow';
 
@@ -45,6 +52,17 @@ describe('purchase flow api', () => {
 
 		await get询价项Summary('inq-1');
 
+		const call = mockHttp.get.mock.calls[0];
+		const params = call?.[1]?.params as { fields: string[] };
+
+		expect(call?.[0]).toBe('/items/inquiry_items/inq-1');
+		expect(params.fields).toEqual(
+			expect.arrayContaining([
+				'customer_id.customer_name',
+				'sales_owner_id.first_name',
+				'buyer_owner_id.first_name',
+			]),
+		);
 		expect(mockHttp.get).toHaveBeenCalledWith(
 			'/items/inquiry_items/inq-1',
 			expect.objectContaining({
@@ -92,8 +110,8 @@ describe('purchase flow api', () => {
 		expect(mockHttp.patch).not.toHaveBeenCalled();
 	});
 
-	test('creates conversation directly when no state transition is requested', async () => {
-		mockHttp.post.mockResolvedValueOnce({ data: { data: { id: 'conversation-1' } } });
+	test('uses action endpoint when adding communication without state transition', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1' } } });
 
 		await commentAndUpdateState({
 			actor_id: 'user-1',
@@ -103,10 +121,79 @@ describe('purchase flow api', () => {
 		});
 
 		expect(mockHttp.post).toHaveBeenCalledWith(
-			'/items/conversations',
-			expect.objectContaining({ content: '仅补充沟通记录' }),
+			'/purchase-flow-actions/communicate',
+			{
+				content: '仅补充沟通记录',
+				inquiry_item_id: 'inq-1',
+			},
 			expect.objectContaining({ signal: undefined }),
 		);
+	});
+
+	test('completes supplier quote through action endpoint', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1', state: 'WaitingSalesReview' } } });
+
+		const result = await completeSupplierQuote('inq-1');
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/purchase-flow-actions/complete-supplier-quote',
+			{ changed_fields: [], inquiry_item_id: 'inq-1' },
+			expect.objectContaining({ signal: undefined }),
+		);
+		expect(result.state).toBe('WaitingSalesReview');
+	});
+
+	test('selects final quote through action endpoint', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1', customer_quote_id: 'cq-1', approval_required: false, approval_status: 'NotRequired', state: 'Quoted' } } });
+
+		const result = await selectFinalQuote('inq-1', 'quote-1', { currency: 'USD', lead_time: '14天', price: '150', remark: '含利润报价' });
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/purchase-flow-actions/select-final-quote',
+			{ currency: 'USD', inquiry_item_id: 'inq-1', lead_time: '14天', price: '150', remark: '含利润报价', supplier_quote_id: 'quote-1' },
+			expect.objectContaining({ signal: undefined }),
+		);
+		expect(result.state).toBe('Quoted');
+	});
+
+	test('closes inquiry through action endpoint', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1', state: 'Closed' } } });
+
+		const result = await closeInquiry('inq-1', '客户取消');
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/purchase-flow-actions/close-inquiry',
+			{ inquiry_item_id: 'inq-1', reason: '客户取消' },
+			expect.objectContaining({ signal: undefined }),
+		);
+		expect(result.state).toBe('Closed');
+	});
+
+	test('approves customer quote through action endpoint', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { approval_status: 'Rejected', customer_quote_id: 'cq-1', inquiry_item_id: 'inq-1', manager_approval_id: 'approval-1', state: 'WaitingSalesReview' } } });
+
+		const result = await approveCustomerQuote('approval-1', 'Rejected', '利润不足，请调整报价');
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/purchase-flow-actions/approve-customer-quote',
+			{ approval_id: 'approval-1', decision: 'Rejected', reason: '利润不足，请调整报价' },
+			expect.objectContaining({ signal: undefined }),
+		);
+		expect(result.state).toBe('WaitingSalesReview');
+	});
+
+	test('marks viewed buyer task as accepted through action endpoint', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { accepted: true, inquiry_item_id: 'inq-1', state: 'Purchasing' } } });
+
+		const result = await markViewedAsAccepted('inq-1');
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/purchase-flow-actions/mark-viewed-as-accepted',
+			{ inquiry_item_id: 'inq-1' },
+			expect.objectContaining({ signal: undefined }),
+		);
+
+		expect(result.accepted).toBe(true);
 	});
 
 	test('getTasksWithDetails issues exactly 4 http calls regardless of task count', async () => {
@@ -253,6 +340,19 @@ describe('purchase flow api', () => {
 		expect(result.product_name).toBe('Sensor');
 	});
 
+	test('updates inquiry item through action endpoint', async () => {
+		mockHttp.post.mockResolvedValueOnce({ data: { data: { inquiry_item_id: 'inq-1', updated_fields: ['product_name'] } } });
+
+		const result = await updateInquiryItem('inq-1', { product_name: 'Updated Sensor' });
+
+		expect(mockHttp.post).toHaveBeenCalledWith(
+			'/purchase-flow-actions/update-inquiry',
+			{ inquiry_item_id: 'inq-1', product_name: 'Updated Sensor' },
+			expect.objectContaining({ signal: undefined }),
+		);
+		expect(result.updated_fields).toContain('product_name');
+	});
+
 	test('createSupplierQuote posts to supplier_quotes with given payload', async () => {
 		mockHttp.post.mockResolvedValueOnce({ data: { data: { id: 'quote-1', price: 88 } } });
 
@@ -266,6 +366,18 @@ describe('purchase flow api', () => {
 		);
 
 		expect(result.id).toBe('quote-1');
+	});
+
+	test('loads supplier quote supplier id for edit form refill', async () => {
+		mockHttp.get.mockResolvedValueOnce({ data: { data: [] } });
+
+		await getSupplierQuotes('inq-1');
+
+		const call = mockHttp.get.mock.calls[0];
+		const params = call?.[1]?.params as { fields: string[] };
+
+		expect(call?.[0]).toBe('/items/supplier_quotes');
+		expect(params.fields).toEqual(expect.arrayContaining(['supplier_id.id', 'supplier_id.supplier_name']));
 	});
 
 	test('updateSupplierQuote patches supplier_quotes record', async () => {

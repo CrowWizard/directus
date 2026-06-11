@@ -2,18 +2,23 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { RouterLink, useRoute } from 'vue-router';
 import {
+	approveCustomerQuote,
 	commentAndUpdateState,
-	createCustomerQuote,
+	closeInquiry,
+	completeSupplierQuote,
 	createSupplierQuote,
 	deleteSupplierQuote,
 	get询价项Detail,
 	listSuppliers,
+	markViewedAsAccepted,
+	selectFinalQuote,
+	updateInquiryItem,
 	updateSupplierQuote,
 } from '../api/purchase-flow';
 import AppShell from '../components/app-shell.vue';
 import ConversationPanel from '../components/conversation-panel.vue';
 import InquiryItemKeyInfo from '../components/inquiry-item-key-info.vue';
-import { useAuthStore } from '../stores/auth';
+import { mapRoleScope, useAuthStore } from '../stores/auth';
 import type { Customer, CustomerQuote, InquiryItemDetail, InquiryState, Supplier, SupplierQuote } from '../types/purchase-flow';
 
 const route = useRoute();
@@ -27,21 +32,45 @@ const quoteError = ref('');
 const quoteSuccess = ref('');
 const customerQuoteError = ref('');
 const customerQuoteSuccess = ref('');
+const approvalError = ref('');
+const approvalSuccess = ref('');
+const approvalReason = ref('');
 const quoteErrorField = ref('');
-const customerQuoteErrorField = ref('');
-const selectedQuoteKeys = ref<string[]>([]);
+const inquiryEditError = ref('');
+const inquiryEditSuccess = ref('');
+const selectedQuoteKey = ref('');
 const suppliers = ref<Supplier[]>([]);
 const showQuoteForm = ref(false);
+const showInquiryEditForm = ref(false);
 const editingQuoteId = ref<string | null>(null);
 const pendingSupplierQuoteDeleteKey = ref<string | null>(null);
+const lastSupplierQuoteChangedFields = ref<string[]>([]);
 
 const customerQuoteSubmitting = ref(false);
+const completeQuoteSubmitting = ref(false);
+const inquiryEditSubmitting = ref(false);
+const closeInquirySubmitting = ref(false);
+const approvalSubmitting = ref(false);
+
+const inquiryEditForm = reactive({
+	customer_id: '',
+	project_name: '',
+	product_name: '',
+	brand: '',
+	model: '',
+	specification: '',
+	quantity: '',
+	unit: '',
+	target_price: '',
+	priority: 'Normal',
+	remark: '',
+	tags: '',
+});
 
 const quoteForm = reactive({
 	supplier_id: '',
 	price: '',
 	currency: 'CNY',
-	moq: '',
 	lead_time: '',
 	quoted_at: '',
 	remark: '',
@@ -49,26 +78,25 @@ const quoteForm = reactive({
 	is_recommended: false,
 });
 
-const customerQuoteForm = reactive({
+const finalQuoteForm = reactive({
 	price: '',
-	currency: 'USD',
+	currency: 'CNY',
 	lead_time: '',
-	quoted_at: '',
 	remark: '',
-	approval_reason: '',
 });
+
+const closeReason = ref('');
 
 const requestController = new AbortController();
 let activeRequest = 0;
+const autoAcceptedItemIds = new Set<string>();
 
 const quoteKeys = computed(() => item.value?.supplier_quotes.map(getQuoteKey) || []);
 
-const selectedQuotes = computed(() => {
-	if (!item.value) return [];
+const selectedQuote = computed(() => {
+	if (!item.value) return null;
 
-	const selected = new Set(selectedQuoteKeys.value);
-
-	return item.value.supplier_quotes.filter((quote) => selected.has(getQuoteKey(quote)));
+	return item.value.supplier_quotes.find((quote) => getQuoteKey(quote) === selectedQuoteKey.value) || null;
 });
 
 const recommendedQuotes = computed(() => {
@@ -80,12 +108,20 @@ const recommendedQuotes = computed(() => {
 const latestCustomerQuote = computed(() => item.value?.customer_quotes[0] || null);
 const managerApprovals = computed(() => item.value?.manager_approvals || []);
 const pendingApproval = computed(() => managerApprovals.value.find((approval) => approval.status === 'Pending') || null);
-const needsManagerApprovalHint = computed(() => {
-	const price = Number(customerQuoteForm.price);
-	const targetPrice = Number(item.value?.target_price);
+const currentRoleScope = computed(() => {
+	const role = auth.currentUser?.role;
+	const roleName = typeof role === 'string' ? role : role?.name || '';
 
-	return Number.isFinite(price) && Number.isFinite(targetPrice) && targetPrice > 0 && price > targetPrice;
+	return mapRoleScope(roleName);
 });
+const canViewApprovalStatus = computed(() => currentRoleScope.value === 'Manager');
+const isInquiryLocked = computed(() => Boolean(item.value && ['Quoted', 'Closed'].includes(item.value.state)));
+const canViewFinalQuote = computed(() => Boolean(item.value && (currentRoleScope.value === 'Manager' || (currentRoleScope.value === 'Sales' && userId(item.value.sales_owner_id) === auth.currentUser?.id))));
+const canSubmitFinalQuote = computed(() => Boolean(item.value && !isInquiryLocked.value && currentRoleScope.value === 'Sales' && userId(item.value.sales_owner_id) === auth.currentUser?.id));
+const canAddSupplierQuote = computed(() => Boolean(item.value && !isInquiryLocked.value && currentRoleScope.value === 'Buyer' && userId(item.value.buyer_owner_id) === auth.currentUser?.id));
+const canCompleteSupplierQuote = computed(() => Boolean(item.value && !isInquiryLocked.value && currentRoleScope.value === 'Buyer' && item.value.state === 'Purchasing' && userId(item.value.buyer_owner_id) === auth.currentUser?.id));
+const canEditInquiry = computed(() => Boolean(item.value && currentRoleScope.value === 'Sales' && userId(item.value.sales_owner_id) === auth.currentUser?.id && !['Quoted', 'Closed'].includes(item.value.state)));
+const canCloseInquiry = computed(() => Boolean(item.value && ['Manager', 'Sales'].includes(currentRoleScope.value) && item.value.state !== 'Closed'));
 
 function getQuoteKey(quote: SupplierQuote) {
 	return quote.id || `${quote.supplier_id || 'supplier'}-${quote.price || 'price'}-${quote.quoted_at || 'time'}`;
@@ -105,6 +141,13 @@ function customerName(customer: CustomerQuote['customer_id'] | InquiryItemDetail
 	return (customer as Customer).customer_name || (customer as Customer).customer_code || '-';
 }
 
+function relationId(value?: { id: string } | string | null) {
+	if (!value) return '';
+	if (typeof value === 'string') return value;
+
+	return value.id;
+}
+
 function actorName(user: SupplierQuote['quoted_by']) {
 	if (!user) return '-';
 	if (typeof user === 'string') return user;
@@ -120,11 +163,49 @@ function userId(user: SupplierQuote['quoted_by']) {
 }
 
 function canManageQuote(quote: SupplierQuote) {
-	return Boolean(quote.id && auth.currentUser?.id && userId(quote.quoted_by) === auth.currentUser.id);
+	if (isInquiryLocked.value || !item.value || !quote.id || !auth.currentUser?.id) return false;
+
+	const isQuoteCreator = userId(quote.quoted_by) === auth.currentUser.id;
+	const isAssignedBuyer = currentRoleScope.value === 'Buyer' && item.value.state === 'Purchasing' && userId(item.value.buyer_owner_id) === auth.currentUser.id;
+
+	return isQuoteCreator || isAssignedBuyer;
+}
+
+function isCurrentBuyerAssignedTask(currentItem: InquiryItemDetail) {
+	return (
+		currentRoleScope.value === 'Buyer' &&
+		currentItem.state === 'Assigned' &&
+		!currentItem.accepted_at &&
+		Boolean(auth.currentUser?.id) &&
+		userId(currentItem.buyer_owner_id) === auth.currentUser?.id
+	);
 }
 
 function getQuoteText(quote: SupplierQuote) {
 	return `${quote.price || '-'} ${quote.currency || ''}`.trim();
+}
+
+function fillInquiryEditForm(currentItem: InquiryItemDetail) {
+	inquiryEditForm.customer_id = relationId(currentItem.customer_id);
+	inquiryEditForm.project_name = currentItem.project_name || '';
+	inquiryEditForm.product_name = currentItem.product_name || '';
+	inquiryEditForm.brand = currentItem.brand || '';
+	inquiryEditForm.model = currentItem.model || '';
+	inquiryEditForm.specification = currentItem.specification || '';
+	inquiryEditForm.quantity = currentItem.quantity === null || currentItem.quantity === undefined ? '' : String(currentItem.quantity);
+	inquiryEditForm.unit = currentItem.unit || '';
+	inquiryEditForm.target_price = currentItem.target_price === null || currentItem.target_price === undefined ? '' : String(currentItem.target_price);
+	inquiryEditForm.priority = currentItem.priority || 'Normal';
+	inquiryEditForm.remark = currentItem.remark || '';
+	inquiryEditForm.tags = currentItem.tags || '';
+}
+
+function toggleInquiryEditForm() {
+	if (!item.value) return;
+	fillInquiryEditForm(item.value);
+	inquiryEditError.value = '';
+	inquiryEditSuccess.value = '';
+	showInquiryEditForm.value = !showInquiryEditForm.value;
 }
 
 function normalizeText(value?: string | null) {
@@ -156,12 +237,35 @@ async function load(signal?: AbortSignal) {
 	error.value = '';
 
 	try {
-		item.value = await get询价项Detail(String(route.params.id), signal);
+		const detail = await get询价项Detail(String(route.params.id), signal);
+		item.value = detail;
+
+		if (isCurrentBuyerAssignedTask(detail)) {
+			await markCurrentTaskViewedAsAccepted(detail, signal);
+		}
 	} catch (err) {
 		if (err instanceof Error && err.name === 'CanceledError') return;
 		error.value = err instanceof Error ? err.message : '询价项详情加载失败';
 	} finally {
 		loading.value = false;
+	}
+}
+
+async function markCurrentTaskViewedAsAccepted(currentItem: InquiryItemDetail, signal?: AbortSignal) {
+	if (autoAcceptedItemIds.has(currentItem.id)) return;
+
+	autoAcceptedItemIds.add(currentItem.id);
+
+	try {
+		const result = await markViewedAsAccepted(currentItem.id, signal);
+
+		if (result.accepted) {
+			item.value = await get询价项Detail(currentItem.id, signal);
+		}
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		error.value = err instanceof Error ? err.message : '自动开始处理失败';
+		autoAcceptedItemIds.delete(currentItem.id);
 	}
 }
 
@@ -175,6 +279,11 @@ async function loadSuppliers(signal?: AbortSignal) {
 }
 
 async function submitConversation(payload: { content: string; state: InquiryState | null }) {
+	if (isInquiryLocked.value) {
+		error.value = '询价项已完成或已结束，不能再提交沟通。';
+		return;
+	}
+
 	if (!auth.currentUser?.id) {
 		error.value = '无法识别当前用户，请重新登录。';
 		return;
@@ -208,7 +317,6 @@ function resetQuoteForm() {
 	quoteForm.supplier_id = '';
 	quoteForm.price = '';
 	quoteForm.currency = 'CNY';
-	quoteForm.moq = '';
 	quoteForm.lead_time = '';
 	quoteForm.quoted_at = '';
 	quoteForm.remark = '';
@@ -227,13 +335,43 @@ function editSupplierQuote(quote: SupplierQuote) {
 	quoteForm.supplier_id = typeof quote.supplier_id === 'string' ? quote.supplier_id : quote.supplier_id?.id || '';
 	quoteForm.price = quote.price === null || quote.price === undefined ? '' : String(quote.price);
 	quoteForm.currency = quote.currency || 'CNY';
-	quoteForm.moq = quote.moq === null || quote.moq === undefined ? '' : String(quote.moq);
 	quoteForm.lead_time = quote.lead_time || '';
 	quoteForm.quoted_at = quote.quoted_at ? quote.quoted_at.slice(0, 10) : '';
 	quoteForm.remark = quote.remark || '';
 	quoteForm.attachment_url = getFirstAttachment(quote.attachment_ids);
 	quoteForm.is_recommended = Boolean(quote.is_recommended);
 	showQuoteForm.value = true;
+}
+
+function getSupplierQuoteChangedFields(quote: SupplierQuote | undefined) {
+	if (!quote) return [];
+
+	const checks: Array<[string, unknown, unknown]> = [
+		['供应商', relationId(quote.supplier_id), quoteForm.supplier_id],
+		['采购价格', quote.price, quoteForm.price],
+		['币种', quote.currency || 'CNY', quoteForm.currency],
+		['货期', quote.lead_time, quoteForm.lead_time],
+		['报价时间', quote.quoted_at ? quote.quoted_at.slice(0, 10) : '', quoteForm.quoted_at],
+		['备注', quote.remark, quoteForm.remark],
+		['推荐报价', Boolean(quote.is_recommended), quoteForm.is_recommended],
+	];
+
+	return checks
+		.filter(([, before, after]) => normalizeChangedValue(before) !== normalizeChangedValue(after))
+		.map(([label, before, after]) => `${label}：${formatChangedValue(before)} -> ${formatChangedValue(after)}`);
+}
+
+function normalizeChangedValue(value: unknown) {
+	if (value === null || value === undefined) return '';
+	if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean).join(',');
+
+	return String(value).trim();
+}
+
+function formatChangedValue(value: unknown) {
+	const normalizedValue = normalizeChangedValue(value);
+
+	return normalizedValue || '空';
 }
 
 function getFirstAttachment(value: unknown) {
@@ -272,6 +410,11 @@ async function submitSupplierQuote() {
 		return;
 	}
 
+	if (isInquiryLocked.value) {
+		quoteError.value = '最终报价完成后不能再修改供应商报价。';
+		return;
+	}
+
 	if (!quoteForm.supplier_id) {
 		quoteError.value = '请选择供应商。';
 		quoteErrorField.value = 'supplier-quote-supplier';
@@ -287,12 +430,6 @@ async function submitSupplierQuote() {
 	if (!isCurrencyCode(quoteForm.currency)) {
 		quoteError.value = '币种必须为 3 位大写字母，例如 CNY、USD。';
 		quoteErrorField.value = 'supplier-quote-currency';
-		return;
-	}
-
-	if (quoteForm.moq && !isPositiveNumber(quoteForm.moq)) {
-		quoteError.value = 'MOQ 必须为大于 0 的数字。';
-		quoteErrorField.value = 'supplier-quote-moq';
 		return;
 	}
 
@@ -312,6 +449,8 @@ async function submitSupplierQuote() {
 
 	try {
 		const isEditing = Boolean(editingQuoteId.value);
+		const editingQuote = item.value?.supplier_quotes.find((quote) => quote.id === editingQuoteId.value);
+		const changedFields = isEditing ? getSupplierQuoteChangedFields(editingQuote) : ['新增报价'];
 		const payload = {
 			attachment_ids: quoteForm.attachment_url ? [quoteForm.attachment_url] : null,
 			currency: quoteForm.currency || null,
@@ -319,7 +458,6 @@ async function submitSupplierQuote() {
 			inquiry_price: quoteForm.price,
 			is_recommended: quoteForm.is_recommended,
 			lead_time: quoteForm.lead_time || null,
-			moq: quoteForm.moq || null,
 			price: quoteForm.price,
 			quoted_by: auth.currentUser.id,
 			quoted_at: quoteForm.quoted_at || null,
@@ -336,7 +474,8 @@ async function submitSupplierQuote() {
 		resetQuoteForm();
 		showQuoteForm.value = false;
 		await load(requestController.signal);
-		quoteSuccess.value = isEditing ? '询价已更新。' : '询价已保存。';
+		lastSupplierQuoteChangedFields.value = changedFields;
+		quoteSuccess.value = isEditing ? `询价已更新，修改项：${changedFields.join('、') || '无变化'}。如已确认报价完整，请点击完成报价通知外贸。` : '询价已保存。如已确认报价完整，请点击完成报价通知外贸。';
 	} catch (err) {
 		if (err instanceof Error && err.name === 'CanceledError') return;
 		quoteError.value = err instanceof Error ? err.message : '询价保存失败';
@@ -345,10 +484,9 @@ async function submitSupplierQuote() {
 	}
 }
 
-async function submitCustomerQuote() {
+async function submitFinalQuote() {
 	customerQuoteError.value = '';
 	customerQuoteSuccess.value = '';
-	customerQuoteErrorField.value = '';
 
 	if (!auth.currentUser?.id) {
 		customerQuoteError.value = '无法识别当前用户，请重新登录。';
@@ -357,69 +495,120 @@ async function submitCustomerQuote() {
 
 	if (!item.value) return;
 
-	if (!isPositiveNumber(customerQuoteForm.price)) {
-		customerQuoteError.value = '请填写大于 0 的客户报价。';
-		customerQuoteErrorField.value = 'customer-quote-price';
+	if (isInquiryLocked.value) {
+		customerQuoteError.value = '询价项已完成或已结束，不能再提交最终报价。';
 		return;
 	}
 
-	if (!isCurrencyCode(customerQuoteForm.currency)) {
+	if (!selectedQuote.value?.id) {
+		customerQuoteError.value = '请选择一条询价内容作为最终报价。';
+		return;
+	}
+
+	if (!isPositiveNumber(finalQuoteForm.price)) {
+		customerQuoteError.value = '请填写大于 0 的最终报价。';
+		return;
+	}
+
+	if (!isCurrencyCode(finalQuoteForm.currency)) {
 		customerQuoteError.value = '币种必须为 3 位大写字母，例如 CNY、USD。';
-		customerQuoteErrorField.value = 'customer-quote-currency';
 		return;
 	}
 
-	if (!customerQuoteForm.lead_time) {
-		customerQuoteError.value = '请填写客户报价货期。';
-		customerQuoteErrorField.value = 'customer-quote-lead-time';
-		return;
-	}
-
-	if (!customerQuoteForm.quoted_at) {
-		customerQuoteError.value = '请选择客户报价时间。';
-		customerQuoteErrorField.value = 'customer-quote-quoted-at';
-		return;
-	}
-
-	if (needsManagerApprovalHint.value && !customerQuoteForm.approval_reason.trim()) {
-		customerQuoteError.value = '报价高于目标价时，请填写审批说明。';
-		customerQuoteErrorField.value = 'customer-quote-approval-reason';
+	if (!finalQuoteForm.lead_time.trim()) {
+		customerQuoteError.value = '请填写最终报价货期。';
 		return;
 	}
 
 	customerQuoteSubmitting.value = true;
 
 	try {
-		await createCustomerQuote(
+		const result = await selectFinalQuote(
+			item.value.id,
+			selectedQuote.value.id,
 			{
-				approval_status: needsManagerApprovalHint.value ? 'Pending' : 'NotRequired',
-				currency: customerQuoteForm.currency,
-				customer_id: typeof item.value.customer_id === 'string' ? item.value.customer_id : item.value.customer_id?.id || null,
-				inquiry_item_id: item.value.id,
-				lead_time: customerQuoteForm.lead_time,
-				price: customerQuoteForm.price,
-				quoted_at: customerQuoteForm.quoted_at,
-				quoted_by: auth.currentUser.id,
-				remark: [customerQuoteForm.remark, customerQuoteForm.approval_reason && `审批说明：${customerQuoteForm.approval_reason}`]
-					.filter(Boolean)
-					.join('\n'),
+				currency: finalQuoteForm.currency,
+				lead_time: finalQuoteForm.lead_time.trim(),
+				price: finalQuoteForm.price,
+				remark: finalQuoteForm.remark.trim() || null,
+			},
+			requestController.signal,
+		);
+		await load(requestController.signal);
+		customerQuoteSuccess.value = result.approval_required ? '最终报价已提交经理审批。' : '最终报价已形成，询价已完成。';
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		customerQuoteError.value = err instanceof Error ? err.message : '最终报价保存失败';
+	} finally {
+		customerQuoteSubmitting.value = false;
+	}
+}
+
+async function saveInquiryEdit() {
+	if (!item.value || inquiryEditSubmitting.value) return;
+
+	inquiryEditError.value = '';
+	inquiryEditSuccess.value = '';
+
+	if (!inquiryEditForm.product_name.trim()) {
+		inquiryEditError.value = '产品名称不能为空。';
+		return;
+	}
+
+	inquiryEditSubmitting.value = true;
+
+	try {
+		await updateInquiryItem(
+			item.value.id,
+			{
+				brand: inquiryEditForm.brand.trim(),
+				customer_id: inquiryEditForm.customer_id || null,
+				model: inquiryEditForm.model.trim(),
+				priority: inquiryEditForm.priority,
+				product_name: inquiryEditForm.product_name.trim(),
+				project_name: inquiryEditForm.project_name.trim(),
+				quantity: inquiryEditForm.quantity ? Number(inquiryEditForm.quantity) : null,
+				remark: inquiryEditForm.remark.trim(),
+				specification: inquiryEditForm.specification.trim(),
+				tags: inquiryEditForm.tags.trim(),
+				target_price: inquiryEditForm.target_price ? Number(inquiryEditForm.target_price) : null,
+				unit: inquiryEditForm.unit.trim(),
 			},
 			requestController.signal,
 		);
 
-		customerQuoteForm.price = '';
-		customerQuoteForm.currency = 'USD';
-		customerQuoteForm.lead_time = '';
-		customerQuoteForm.quoted_at = '';
-		customerQuoteForm.remark = '';
-		customerQuoteForm.approval_reason = '';
+		showInquiryEditForm.value = false;
 		await load(requestController.signal);
-		customerQuoteSuccess.value = '客户报价已保存，最终审批与状态流转以后端结果为准。';
+		inquiryEditSuccess.value = '询价项已更新，并通知采购查看最新需求。';
 	} catch (err) {
 		if (err instanceof Error && err.name === 'CanceledError') return;
-		customerQuoteError.value = err instanceof Error ? err.message : '客户报价保存失败';
+		inquiryEditError.value = err instanceof Error ? err.message : '询价项保存失败';
 	} finally {
-		customerQuoteSubmitting.value = false;
+		inquiryEditSubmitting.value = false;
+	}
+}
+
+async function completeCurrentSupplierQuote() {
+	if (!item.value || completeQuoteSubmitting.value) return;
+
+	if (item.value.supplier_quotes.length === 0) {
+		quoteError.value = '请先添加至少一条供应商报价，再完成报价。';
+		return;
+	}
+
+	completeQuoteSubmitting.value = true;
+	quoteError.value = '';
+	quoteSuccess.value = '';
+
+	try {
+		await completeSupplierQuote(item.value.id, lastSupplierQuoteChangedFields.value, requestController.signal);
+		await load(requestController.signal);
+		quoteSuccess.value = '已完成报价，并通知外贸确认最终报价。';
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		quoteError.value = err instanceof Error ? err.message : '完成报价失败';
+	} finally {
+		completeQuoteSubmitting.value = false;
 	}
 }
 
@@ -452,14 +641,59 @@ async function removeSupplierQuote(quote: SupplierQuote) {
 	}
 }
 
-function selectAllQuotes() {
-	selectedQuoteKeys.value = quoteKeys.value;
+async function closeCurrentInquiry() {
+	if (!item.value || closeInquirySubmitting.value) return;
+
+	closeInquirySubmitting.value = true;
+	error.value = '';
+
+	try {
+		await closeInquiry(item.value.id, closeReason.value, requestController.signal);
+		closeReason.value = '';
+		await load(requestController.signal);
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		error.value = err instanceof Error ? err.message : '结束询价失败';
+	} finally {
+		closeInquirySubmitting.value = false;
+	}
+}
+
+async function submitApproval(decision: 'Approved' | 'Rejected') {
+	if (!pendingApproval.value?.id || approvalSubmitting.value) return;
+
+	approvalSubmitting.value = true;
+	approvalError.value = '';
+	approvalSuccess.value = '';
+
+	try {
+		const result = await approveCustomerQuote(pendingApproval.value.id, decision, approvalReason.value.trim(), requestController.signal);
+		approvalReason.value = '';
+		await load(requestController.signal);
+		approvalSuccess.value = result.state === 'Quoted' ? '审批已通过，询价已完成。' : '审批已拒绝，已退回外贸修改最终报价。';
+	} catch (err) {
+		if (err instanceof Error && err.name === 'CanceledError') return;
+		approvalError.value = err instanceof Error ? err.message : '审批提交失败';
+	} finally {
+		approvalSubmitting.value = false;
+	}
 }
 
 watch(
 	quoteKeys,
 	(keys) => {
-		selectedQuoteKeys.value = selectedQuoteKeys.value.filter((key) => keys.includes(key));
+		if (selectedQuoteKey.value && !keys.includes(selectedQuoteKey.value)) selectedQuoteKey.value = '';
+	},
+	{ immediate: true },
+);
+
+watch(
+	selectedQuote,
+	(quote) => {
+		finalQuoteForm.price = quote?.price === null || quote?.price === undefined ? '' : String(quote.price);
+		finalQuoteForm.currency = quote?.currency || 'CNY';
+		finalQuoteForm.lead_time = quote?.lead_time || '';
+		finalQuoteForm.remark = quote?.remark || '';
 	},
 	{ immediate: true },
 );
@@ -490,7 +724,17 @@ onUnmounted(() => {
 			<p v-if="error" class="state-card error" role="status" aria-live="polite">{{ error }}</p>
 			<InquiryItemKeyInfo :item="item" />
 			<section class="info-card">
-				<h3>基础信息区</h3>
+				<div class="card-header-row">
+					<div>
+						<h3>基础信息区</h3>
+						<p class="muted">最终报价完成前，发起外贸员可以修改询价项需求。</p>
+					</div>
+					<button v-if="canEditInquiry" type="button" class="ghost-button" :disabled="inquiryEditSubmitting" @click="toggleInquiryEditForm">
+						{{ showInquiryEditForm ? '收起编辑' : '编辑询价项' }}
+					</button>
+				</div>
+				<p v-if="inquiryEditError" class="form-message error" role="status" aria-live="polite">{{ inquiryEditError }}</p>
+				<p v-if="inquiryEditSuccess" class="form-message success" role="status" aria-live="polite">{{ inquiryEditSuccess }}</p>
 				<dl class="meta-grid">
 					<div><dt>客户</dt><dd>{{ customerName(item.customer_id) }}</dd></div>
 					<div><dt>项目</dt><dd>{{ item.project_name || '-' }}</dd></div>
@@ -502,8 +746,36 @@ onUnmounted(() => {
 					<div><dt>完成时间</dt><dd>{{ item.completed_at || '-' }}</dd></div>
 				</dl>
 				<p v-if="item.remark" class="note-block">{{ item.remark }}</p>
+				<form v-if="showInquiryEditForm" class="quote-form" data-test="inquiry-edit-form" :aria-busy="inquiryEditSubmitting ? 'true' : undefined" @submit.prevent="saveInquiryEdit">
+					<div class="form-row">
+						<label for="inquiry-edit-product">产品名称 *<input id="inquiry-edit-product" v-model="inquiryEditForm.product_name" name="product_name" required :disabled="inquiryEditSubmitting" /></label>
+						<label for="inquiry-edit-priority">优先级<select id="inquiry-edit-priority" v-model="inquiryEditForm.priority" name="priority" :disabled="inquiryEditSubmitting"><option value="Low">低</option><option value="Normal">普通</option><option value="High">高</option><option value="Urgent">紧急</option></select></label>
+					</div>
+					<div class="form-row">
+						<label for="inquiry-edit-project">项目<input id="inquiry-edit-project" v-model="inquiryEditForm.project_name" name="project_name" :disabled="inquiryEditSubmitting" /></label>
+						<label for="inquiry-edit-customer">客户 ID<input id="inquiry-edit-customer" v-model="inquiryEditForm.customer_id" name="customer_id" :disabled="inquiryEditSubmitting" /></label>
+					</div>
+					<div class="form-row">
+						<label for="inquiry-edit-brand">品牌<input id="inquiry-edit-brand" v-model="inquiryEditForm.brand" name="brand" :disabled="inquiryEditSubmitting" /></label>
+						<label for="inquiry-edit-model">型号<input id="inquiry-edit-model" v-model="inquiryEditForm.model" name="model" :disabled="inquiryEditSubmitting" /></label>
+					</div>
+					<label for="inquiry-edit-specification">规格<textarea id="inquiry-edit-specification" v-model="inquiryEditForm.specification" name="specification" rows="2" :disabled="inquiryEditSubmitting" /></label>
+					<div class="form-row">
+						<label for="inquiry-edit-quantity">数量<input id="inquiry-edit-quantity" v-model="inquiryEditForm.quantity" name="quantity" type="number" min="0" :disabled="inquiryEditSubmitting" /></label>
+						<label for="inquiry-edit-unit">单位<input id="inquiry-edit-unit" v-model="inquiryEditForm.unit" name="unit" :disabled="inquiryEditSubmitting" /></label>
+					</div>
+					<div class="form-row">
+						<label for="inquiry-edit-target-price">目标价格<input id="inquiry-edit-target-price" v-model="inquiryEditForm.target_price" name="target_price" type="number" min="0" step="0.01" :disabled="inquiryEditSubmitting" /></label>
+						<label for="inquiry-edit-tags">标签<input id="inquiry-edit-tags" v-model="inquiryEditForm.tags" name="tags" :disabled="inquiryEditSubmitting" /></label>
+					</div>
+					<label for="inquiry-edit-remark">备注<textarea id="inquiry-edit-remark" v-model="inquiryEditForm.remark" name="remark" rows="3" :disabled="inquiryEditSubmitting" /></label>
+					<div class="form-actions">
+						<button type="submit" :disabled="inquiryEditSubmitting">{{ inquiryEditSubmitting ? '保存中...' : '保存修改' }}</button>
+						<button type="button" class="ghost-button" :disabled="inquiryEditSubmitting" @click="showInquiryEditForm = false">取消</button>
+					</div>
+				</form>
 			</section>
-			<section class="info-card">
+			<section v-if="canViewApprovalStatus" class="info-card">
 				<div class="card-header-row">
 					<div>
 						<h3>审批状态展示</h3>
@@ -526,9 +798,14 @@ onUnmounted(() => {
 						<h3>询价内容</h3>
 						<p class="muted">维护供应商报价、附件和推荐标记，最终状态校验仍以后端为准。</p>
 					</div>
-					<button type="button" data-test="toggle-supplier-quote-form" @click="showQuoteForm = !showQuoteForm">
-						{{ showQuoteForm ? '收起报价' : '添加供应商报价' }}
-					</button>
+					<div class="form-actions">
+						<button v-if="canAddSupplierQuote" type="button" data-test="toggle-supplier-quote-form" @click="showQuoteForm = !showQuoteForm">
+							{{ showQuoteForm ? '收起报价' : '添加供应商报价' }}
+						</button>
+						<button v-if="canCompleteSupplierQuote" type="button" class="ghost-button" :disabled="completeQuoteSubmitting" @click="completeCurrentSupplierQuote">
+							{{ completeQuoteSubmitting ? '处理中...' : '完成报价' }}
+						</button>
+					</div>
 				</div>
 				<form
 					v-if="showQuoteForm"
@@ -569,26 +846,13 @@ onUnmounted(() => {
 							币种 *
 							<input id="supplier-quote-currency" v-model="quoteForm.currency" name="currency" maxlength="3" :disabled="quoteSubmitting" :aria-invalid="quoteErrorField === 'supplier-quote-currency'" :aria-describedby="quoteErrorField === 'supplier-quote-currency' ? 'supplier-quote-error' : undefined" required />
 						</label>
-						<label for="supplier-quote-moq">
-							MOQ
-							<input
-								id="supplier-quote-moq"
-								v-model="quoteForm.moq"
-								name="moq"
-								type="number"
-								inputmode="numeric"
-								:disabled="quoteSubmitting"
-								:aria-invalid="quoteErrorField === 'supplier-quote-moq'"
-								:aria-describedby="quoteErrorField === 'supplier-quote-moq' ? 'supplier-quote-error' : undefined"
-							/>
-						</label>
-					</div>
-					<div class="form-row">
-						<label for="supplier-quote-lead-time">
-							货期 *
-							<input id="supplier-quote-lead-time" v-model="quoteForm.lead_time" name="lead_time" :disabled="quoteSubmitting" :aria-invalid="quoteErrorField === 'supplier-quote-lead-time'" :aria-describedby="quoteErrorField === 'supplier-quote-lead-time' ? 'supplier-quote-error' : undefined" required />
-						</label>
-						<label for="supplier-quote-quoted-at">
+					<label for="supplier-quote-lead-time">
+						货期 *
+						<input id="supplier-quote-lead-time" v-model="quoteForm.lead_time" name="lead_time" :disabled="quoteSubmitting" :aria-invalid="quoteErrorField === 'supplier-quote-lead-time'" :aria-describedby="quoteErrorField === 'supplier-quote-lead-time' ? 'supplier-quote-error' : undefined" required />
+					</label>
+				</div>
+				<div class="form-row">
+					<label for="supplier-quote-quoted-at">
 							报价时间 *
 							<input
 								id="supplier-quote-quoted-at"
@@ -630,7 +894,6 @@ onUnmounted(() => {
 							<th scope="col">选择</th>
 							<th scope="col">供应商</th>
 							<th scope="col">报价</th>
-							<th scope="col">MOQ</th>
 							<th scope="col">交期</th>
 							<th scope="col">报价时间</th>
 							<th scope="col">备注</th>
@@ -642,17 +905,10 @@ onUnmounted(() => {
 					<tbody>
 						<tr v-for="quote in item.supplier_quotes" :key="getQuoteKey(quote)">
 							<td>
-								<input
-									v-model="selectedQuoteKeys"
-									class="quote-checkbox"
-									type="checkbox"
-									:value="getQuoteKey(quote)"
-									aria-label="选择询价"
-								/>
+								<input v-model="selectedQuoteKey" class="quote-checkbox" type="radio" name="supplier_quote_selection" :value="getQuoteKey(quote)" aria-label="选择最终报价" />
 							</td>
 							<td>{{ supplierName(quote.supplier_id) }}</td>
 							<td>{{ getQuoteText(quote) }}</td>
-							<td>{{ quote.moq || '-' }}</td>
 							<td>{{ quote.lead_time || '-' }}</td>
 							<td>{{ quote.quoted_at || '-' }}</td>
 							<td class="cell-wrap">{{ quote.remark || '-' }}</td>
@@ -679,8 +935,7 @@ onUnmounted(() => {
 							<span>{{ getQuoteText(quote) }}</span>
 						</div>
 						<dl class="mobile-table-meta">
-							<div><dt>MOQ</dt><dd>{{ quote.moq || '-' }}</dd></div>
-							<div><dt>交期</dt><dd>{{ quote.lead_time || '-' }}</dd></div>
+								<div><dt>交期</dt><dd>{{ quote.lead_time || '-' }}</dd></div>
 							<div><dt>报价时间</dt><dd>{{ quote.quoted_at || '-' }}</dd></div>
 							<div><dt>推荐</dt><dd>{{ quote.is_recommended ? '已推荐' : '-' }}</dd></div>
 							<div><dt>备注</dt><dd>{{ quote.remark || '-' }}</dd></div>
@@ -697,67 +952,23 @@ onUnmounted(() => {
 					</li>
 				</ul>
 			</section>
-			<section class="info-card">
+			<section v-if="canViewFinalQuote" class="info-card" data-test="final-quote-section">
 				<div class="card-header-row">
 					<div>
 						<h3>最终报价内容</h3>
-						<p class="muted">从已选询价汇总最终报价，用于快速比较多个供应商方案。</p>
+						<p class="muted">选择一条供应商报价作为最终报价，系统自动判断是否需要经理审批。</p>
 					</div>
-					<button type="button" :disabled="quoteKeys.length === 0" @click="selectAllQuotes">最终报价</button>
 				</div>
-				<table v-if="selectedQuotes.length" class="desktop-table">
-					<thead>
-						<tr>
-							<th scope="col">供应商</th>
-							<th scope="col">报价</th>
-							<th scope="col">MOQ</th>
-							<th scope="col">交期</th>
-							<th scope="col">报价时间</th>
-							<th scope="col">备注</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr v-for="quote in selectedQuotes" :key="`selected-${getQuoteKey(quote)}`">
-							<td>{{ supplierName(quote.supplier_id) }}</td>
-							<td>{{ getQuoteText(quote) }}</td>
-							<td>{{ quote.moq || '-' }}</td>
-							<td>{{ quote.lead_time || '-' }}</td>
-							<td>{{ quote.quoted_at || '-' }}</td>
-							<td class="cell-wrap">{{ quote.remark || '-' }}</td>
-						</tr>
-					</tbody>
-				</table>
-				<ul v-if="selectedQuotes.length" class="mobile-table-list" aria-label="最终报价内容移动端列表">
-					<li v-for="quote in selectedQuotes" :key="`selected-mobile-${getQuoteKey(quote)}`" class="mobile-table-item">
-						<div class="mobile-table-item__header">
-							<strong>{{ supplierName(quote.supplier_id) }}</strong>
-							<span>{{ getQuoteText(quote) }}</span>
-						</div>
-						<dl class="mobile-table-meta">
-							<div><dt>MOQ</dt><dd>{{ quote.moq || '-' }}</dd></div>
-							<div><dt>交期</dt><dd>{{ quote.lead_time || '-' }}</dd></div>
-							<div><dt>报价时间</dt><dd>{{ quote.quoted_at || '-' }}</dd></div>
-							<div><dt>备注</dt><dd>{{ quote.remark || '-' }}</dd></div>
-						</dl>
-					</li>
-				</ul>
-				<p v-else class="muted">请选择询价内容后点击最终报价。</p>
-				<form class="quote-form" :aria-busy="customerQuoteSubmitting ? 'true' : undefined" @submit.prevent="submitCustomerQuote">
-					<h4>客户报价区</h4>
-					<p v-if="customerQuoteError" id="customer-quote-error" class="form-message error" role="status" aria-live="polite">{{ customerQuoteError }}</p>
-					<p v-if="customerQuoteSuccess" class="form-message success" role="status" aria-live="polite">{{ customerQuoteSuccess }}</p>
+				<p v-if="customerQuoteError" class="form-message error" role="status" aria-live="polite">{{ customerQuoteError }}</p>
+				<p v-if="customerQuoteSuccess" class="form-message success" role="status" aria-live="polite">{{ customerQuoteSuccess }}</p>
+				<form v-if="canSubmitFinalQuote && selectedQuote" class="quote-form" data-test="final-quote-form" :aria-busy="customerQuoteSubmitting ? 'true' : undefined" @submit.prevent="submitFinalQuote">
 					<div class="form-row">
-						<label for="customer-quote-price">客户报价 *<input id="customer-quote-price" v-model="customerQuoteForm.price" type="number" step="0.01" inputmode="decimal" :disabled="customerQuoteSubmitting" :aria-invalid="customerQuoteErrorField === 'customer-quote-price'" :aria-describedby="customerQuoteErrorField === 'customer-quote-price' ? 'customer-quote-error' : undefined" required /></label>
-						<label for="customer-quote-currency">币种 *<input id="customer-quote-currency" v-model="customerQuoteForm.currency" maxlength="3" :disabled="customerQuoteSubmitting" :aria-invalid="customerQuoteErrorField === 'customer-quote-currency'" :aria-describedby="customerQuoteErrorField === 'customer-quote-currency' ? 'customer-quote-error' : undefined" required /></label>
+						<label for="final-quote-price">最终报价 *<input id="final-quote-price" v-model="finalQuoteForm.price" name="final_price" type="number" step="0.01" inputmode="decimal" :disabled="customerQuoteSubmitting" required /></label>
+						<label for="final-quote-currency">币种 *<input id="final-quote-currency" v-model="finalQuoteForm.currency" name="final_currency" maxlength="3" :disabled="customerQuoteSubmitting" required /></label>
 					</div>
-					<div class="form-row">
-						<label for="customer-quote-lead-time">货期 *<input id="customer-quote-lead-time" v-model="customerQuoteForm.lead_time" :disabled="customerQuoteSubmitting" :aria-invalid="customerQuoteErrorField === 'customer-quote-lead-time'" :aria-describedby="customerQuoteErrorField === 'customer-quote-lead-time' ? 'customer-quote-error' : undefined" required /></label>
-						<label for="customer-quote-quoted-at">报价时间 *<input id="customer-quote-quoted-at" v-model="customerQuoteForm.quoted_at" type="date" :disabled="customerQuoteSubmitting" :aria-invalid="customerQuoteErrorField === 'customer-quote-quoted-at'" :aria-describedby="customerQuoteErrorField === 'customer-quote-quoted-at' ? 'customer-quote-error' : undefined" required /></label>
-					</div>
-					<label for="customer-quote-remark">备注<textarea id="customer-quote-remark" v-model="customerQuoteForm.remark" rows="3" :disabled="customerQuoteSubmitting" /></label>
-					<label v-if="needsManagerApprovalHint" for="customer-quote-approval-reason">审批说明 *<textarea id="customer-quote-approval-reason" v-model="customerQuoteForm.approval_reason" rows="3" :disabled="customerQuoteSubmitting" :aria-invalid="customerQuoteErrorField === 'customer-quote-approval-reason'" :aria-describedby="customerQuoteErrorField === 'customer-quote-approval-reason' ? 'customer-quote-error customer-quote-approval-hint' : 'customer-quote-approval-hint'" required /></label>
-					<p v-if="needsManagerApprovalHint" id="customer-quote-approval-hint" class="form-message warning">当前报价高于目标价格，前端提示可能需要经理审批，最终以后端结果为准。</p>
-					<button type="submit" :disabled="customerQuoteSubmitting">{{ customerQuoteSubmitting ? '提交中...' : '提交客户报价' }}</button>
+					<label for="final-quote-lead-time">货期 *<input id="final-quote-lead-time" v-model="finalQuoteForm.lead_time" name="final_lead_time" :disabled="customerQuoteSubmitting" required /></label>
+					<label for="final-quote-remark">备注<textarea id="final-quote-remark" v-model="finalQuoteForm.remark" name="final_remark" rows="3" :disabled="customerQuoteSubmitting" /></label>
+					<button type="submit" :disabled="customerQuoteSubmitting">{{ customerQuoteSubmitting ? '提交中...' : '最终报价' }}</button>
 				</form>
 				<div v-if="item.customer_quotes.length" class="quote-history">
 					<h4>客户报价历史</h4>
@@ -795,6 +1006,12 @@ onUnmounted(() => {
 						</li>
 					</ul>
 				</div>
+			</section>
+			<section v-if="canCloseInquiry" class="info-card">
+				<h3>结束询价</h3>
+				<p class="muted">确认客户不再推进或流程已完成后，可以手动结束询价。</p>
+				<label for="close-inquiry-reason">结束原因<textarea id="close-inquiry-reason" v-model="closeReason" rows="2" :disabled="closeInquirySubmitting" /></label>
+				<button type="button" class="danger-button" :disabled="closeInquirySubmitting" @click="closeCurrentInquiry">{{ closeInquirySubmitting ? '结束中...' : '结束询价' }}</button>
 			</section>
 			<section class="info-card">
 				<h3>询价推荐</h3>
@@ -840,13 +1057,18 @@ onUnmounted(() => {
 			</section>
 			<section v-if="auth.roleScope === 'Manager'" class="info-card">
 				<h3>经理审批入口</h3>
-				<p class="muted">经理审批动作需以后端审批接口为准。当前页面展示待审批记录和原因，避免前端绕过服务端规则。</p>
-				<div class="form-actions">
-					<button type="button" :disabled="!pendingApproval">审批通过</button>
-					<button type="button" class="danger-button" :disabled="!pendingApproval">审批拒绝</button>
-				</div>
+				<p class="muted">审批通过后询价完成；审批拒绝后退回外贸修改最终报价，可再次提交审批。</p>
+				<p v-if="approvalError" class="form-message error" role="status" aria-live="polite">{{ approvalError }}</p>
+				<p v-if="approvalSuccess" class="form-message success" role="status" aria-live="polite">{{ approvalSuccess }}</p>
+				<form class="quote-form" data-test="approval-form" :aria-busy="approvalSubmitting ? 'true' : undefined" @submit.prevent>
+					<label for="approval-reason">审批备注<textarea id="approval-reason" v-model="approvalReason" name="approval_reason" rows="3" :disabled="approvalSubmitting || !pendingApproval" placeholder="可填写通过说明，或拒绝后要求外贸调整的原因" /></label>
+					<div class="form-actions">
+						<button type="button" :disabled="approvalSubmitting || !pendingApproval" @click="submitApproval('Approved')">{{ approvalSubmitting ? '处理中...' : '审批通过' }}</button>
+						<button type="button" class="danger-button" :disabled="approvalSubmitting || !pendingApproval" @click="submitApproval('Rejected')">{{ approvalSubmitting ? '处理中...' : '审批拒绝' }}</button>
+					</div>
+				</form>
 			</section>
-			<ConversationPanel :conversations="item.conversations" :submitting="submitting" @submit="submitConversation" />
+			<ConversationPanel :conversations="item.conversations" :disabled="isInquiryLocked" :role-scope="currentRoleScope" :submitting="submitting" @submit="submitConversation" />
 		</div>
 	</AppShell>
 </template>
